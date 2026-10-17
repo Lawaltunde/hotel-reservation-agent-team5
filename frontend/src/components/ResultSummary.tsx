@@ -36,6 +36,12 @@ function bestQuotePhrase(task: Task): string | null {
   return estimated ? `≈ ${money} at ${hotel} (${ESTIMATE_NOTE})` : `${money} all-in at ${hotel}`;
 }
 
+/** Who the result email went to: the user, or the organizer inbox when the prompt had no email. */
+function emailedTo(task: Task): string {
+  const source = task.report?.emailSource ?? task.request?.emailSource;
+  return source === "ORGANIZER_FALLBACK" ? "the organizer inbox" : "you";
+}
+
 /** Summary for a finished search that has no usable quote, keyed by outcome. */
 function noQuoteSummary(task: Task): Summary {
   switch (task.outcome) {
@@ -56,13 +62,13 @@ function noQuoteSummary(task: Task): Summary {
       return {
         tone: "info",
         title: "A hotel needs to follow up",
-        body: "A hotel couldn't give a full quote on the call. Nothing was reserved. Details are in your email.",
+        body: `A hotel couldn't give a full quote on the call. Nothing was reserved. The details have been emailed to ${emailedTo(task)}.`,
       };
     default:
       return {
         tone: "info",
         title: "Search finished without a usable quote",
-        body: "The agent didn't get a quote it could stand behind. Nothing was reserved. The details and transcripts have been emailed to you.",
+        body: `The agent didn't get a quote it could stand behind. Nothing was reserved. The details and transcripts have been emailed to ${emailedTo(task)}.`,
         nextSteps: WIDEN_SEARCH,
       };
   }
@@ -85,7 +91,7 @@ function summarize(task: Task): Summary {
         return {
           tone: "success",
           title: `Cheapest confirmed-available: ${price}`,
-          body: "This is a quote, not a booking. Nothing has been reserved. The result and the call transcript have been emailed to you.",
+          body: `This is a quote, not a booking. Nothing has been reserved. The result and the call transcript have been emailed to ${emailedTo(task)}.`,
         };
       }
       return noQuoteSummary(task);
