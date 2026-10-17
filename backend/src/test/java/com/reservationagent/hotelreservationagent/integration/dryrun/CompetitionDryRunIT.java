@@ -497,7 +497,7 @@ class CompetitionDryRunIT {
             }
         }
         assertThat(text).containsPattern("Call recording: " + java.util.regex.Pattern.quote(PUBLIC_BASE_URL) + "/\\S+")
-                .contains("Conversation: https://elevenlabs.io/app/conversational-ai/history/" + winnerConversation)
+                .contains("Conversation: https://elevenlabs.io/app/agents/history/" + winnerConversation)
                 .contains("=== " + winner.name(), winner.transcript().get(5)[1])
                 .containsPattern("Tokens spent: [1-9]\\d*");
         assertThat(text).doesNotContainIgnoringCase("reservation confirmed").doesNotContain("Booking confirmed");
@@ -536,10 +536,24 @@ class CompetitionDryRunIT {
         var audio = client.get().uri(recordingUrl.substring(PUBLIC_BASE_URL.length())).exchange()
                 .expectStatus().isOk().expectBody(byte[].class).returnResult();
         assertThat(audio.getResponseBody()).isEqualTo(AUDIO);
-        // The conversation id is URL-encoded in the path ("+" becomes %2B).
+        // The conversation id is URL-encoded in the path ("+" becomes %2B). The report fetched the audio of
+        // every answered call to attach it, and the link fetched the winner's again.
         assertThat(providers.findAll(getRequestedFor(urlPathMatching("/v1/convai/conversations/.+/audio"))))
                 .extracting(r -> java.net.URLDecoder.decode(r.getUrl(), StandardCharsets.UTF_8))
-                .containsExactly("/v1/convai/conversations/" + winnerConversation + "/audio");
+                .contains("/v1/convai/conversations/" + winnerConversation + "/audio");
+
+        // Recording and transcript are attached, the chosen hotel's call first.
+        List<String> attached = new ArrayList<>();
+        email.path("attachments").forEach(a -> attached.add(a.path("filename").asString()));
+        assertThat(attached).as("attachments").isNotEmpty();
+        assertThat(attached.get(0)).startsWith("call-1-").endsWith(".mp3");
+        assertThat(attached.get(1)).isEqualTo(attached.get(0).replace(".mp3", "-transcript.txt"));
+        assertThat(java.util.Base64.getDecoder().decode(email.path("attachments").get(0).path("content").asString()))
+                .isEqualTo(AUDIO);
+        assertThat(attached).allMatch(name -> name.matches("call-\\d+-[a-z0-9-]+(\\.mp3|-transcript\\.txt)"));
+        List<String> reported = new ArrayList<>();
+        report.path("attachments").forEach(a -> reported.add(a.asString()));
+        assertThat(reported).as("report lists the attachment names").containsExactlyElementsOf(attached);
     }
 
     private void answer(Map<String, String> started, List<ScenarioHotel> batch, boolean concurrentWithRedelivery)

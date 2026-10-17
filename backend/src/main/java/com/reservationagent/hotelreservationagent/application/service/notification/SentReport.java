@@ -19,8 +19,13 @@ public record SentReport(
         Fields fields,
         Tokens tokens,
         List<TranscriptEntry> transcripts,
-        Instant composedAt
+        Instant composedAt,
+        List<String> attachments
 ) {
+
+    public SentReport {
+        attachments = attachments == null ? List.of() : List.copyOf(attachments);
+    }
 
     /**
      * @param hotelPhone        the number that was called
