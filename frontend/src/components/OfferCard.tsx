@@ -1,4 +1,4 @@
-import { formatInstant, formatMoney, humanize, taxInclusionLabel, UNKNOWN } from "@/components/format";
+import { formatMoney, formatQuoteValidity, humanize, taxInclusionLabel, UNKNOWN } from "@/components/format";
 import type { Offer } from "@/models/task";
 
 interface OfferCardProps {
@@ -12,19 +12,23 @@ interface OfferCardProps {
 /**
  * One hotel quote. Per the honesty rule, a quote is always labelled as a quote: the enquiry ID
  * is a hotel reference, not a booking, and unknown amounts read "Unknown", never 0.
+ *
+ * The headline is the comparable all-in total (`negotiatedTotal`). When that is unknown the card
+ * says so instead of promoting a partial figure such as a pre-tax room rate.
  */
 export function OfferCard({ offer, best = false, booked = false }: OfferCardProps) {
   const currency = offer.currency || "CAD";
-  const total = offer.negotiatedTotal ?? offer.initialQuotedTotal;
+  const total = offer.negotiatedTotal;
   const saving =
-    offer.initialQuotedTotal !== null && offer.negotiatedTotal !== null
-      ? offer.initialQuotedTotal - offer.negotiatedTotal
-      : null;
+    offer.initialQuotedTotal !== null && total !== null ? offer.initialQuotedTotal - total : null;
+  const validity = formatQuoteValidity(offer);
   const headingId = `offer-${offer.offerId}`;
+  const totalId = `${headingId}-total`;
 
   return (
     <article
       aria-labelledby={headingId}
+      aria-describedby={totalId}
       className={`rounded-xl border bg-white p-5 ${best ? "border-emerald-300 ring-1 ring-emerald-200" : "border-slate-200"}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -43,10 +47,19 @@ export function OfferCard({ offer, best = false, booked = false }: OfferCardProp
           <p className="text-sm text-slate-600">{offer.hotelAddress ?? "Address unknown"}</p>
           {offer.roomType && <p className="mt-1 text-sm text-slate-600">{offer.roomType}</p>}
         </div>
-        <div className="text-right">
-          <p className="text-xs text-slate-500">{offer.negotiatedTotal !== null ? "Negotiated total" : "Quoted total"}</p>
-          <p className="text-2xl font-semibold tabular-nums text-slate-900">{formatMoney(total, currency)}</p>
-          <p className="text-xs text-slate-600">{taxInclusionLabel(offer.taxInclusion)}</p>
+        <div id={totalId} className="text-right">
+          <p className="text-xs text-slate-500">All-in total, {currency}</p>
+          {total !== null ? (
+            <>
+              <p className="text-2xl font-semibold tabular-nums text-slate-900">{formatMoney(total, currency)}</p>
+              <p className="text-xs text-slate-600">Room, HST, municipal tax and mandatory fees</p>
+            </>
+          ) : (
+            <>
+              <p className="text-2xl font-semibold text-slate-500 italic">{UNKNOWN}</p>
+              <p className="max-w-56 text-xs text-slate-600">Not every tax or fee was stated, so this quote can&apos;t be ranked.</p>
+            </>
+          )}
           {saving !== null && saving > 0 && (
             <p className="mt-1 text-xs font-medium text-emerald-700">
               {formatMoney(saving, currency)} below the first quote of {formatMoney(offer.initialQuotedTotal, currency)}
@@ -61,15 +74,26 @@ export function OfferCard({ offer, best = false, booked = false }: OfferCardProp
         </p>
       )}
 
+      {offer.totalsDisagree && (
+        <p role="note" className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <span className="font-medium">The figures don&apos;t quite add up.</span> The hotel stated an all-in total of{" "}
+          {formatMoney(offer.allInTotal, currency)}, but the room rate, taxes and fees it gave sum to{" "}
+          {formatMoney(total, currency)}. We used the summed figure; confirm the total with the hotel before relying on it.
+        </p>
+      )}
+
+      {validity && <p className="mt-3 text-sm text-slate-700">{validity}</p>}
+
       <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-2 border-t border-slate-100 pt-4 text-sm sm:grid-cols-2">
         <Row term="First quoted total" value={formatMoney(offer.initialQuotedTotal, currency)} />
+        {offer.allInTotal !== undefined && <Row term="All-in total as stated by the hotel" value={formatMoney(offer.allInTotal, currency)} />}
+        <Row term="Taxes in stated total" value={taxInclusionLabel(offer.taxInclusion)} />
         <Row term="HST" value={formatMoney(offer.hst, currency)} />
         <Row term="Municipal accommodation tax" value={formatMoney(offer.municipalAccommodationTax, currency)} />
         <Row term="Mandatory fees" value={formatMoney(offer.mandatoryFees, currency)} />
         <Row term="Cancellation" value={offer.cancellationTerms ?? UNKNOWN} />
         <Row term="Deposit" value={offer.depositTerms ?? UNKNOWN} />
         <Row term="Hotel reference (not a booking)" value={offer.enquiryId ?? "None given"} mono={offer.enquiryId !== null} />
-        <Row term="Quote valid until" value={formatInstant(offer.quoteValidUntil)} />
         <Row term="Evidence" value={offer.evidenceStatus ? humanize(offer.evidenceStatus) : UNKNOWN} />
       </dl>
     </article>
