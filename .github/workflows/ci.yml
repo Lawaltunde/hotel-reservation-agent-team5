@@ -123,6 +123,13 @@ jobs:
       - name: Package jar (UI + API)
         run: ./mvnw -B -DskipTests package
 
+      # The chat specs need the prompt reader; this mock answers it by keyword (no real model).
+      # Node is preinstalled on ubuntu-latest; the script has no dependencies.
+      - name: Start mock OpenAI
+        run: |
+          nohup node e2e/support/mock-openai.mjs > mock-openai.log 2>&1 &
+          echo $! > mock-openai.pid
+
       - name: Start app
         env:
           SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/hotelagent
@@ -137,6 +144,8 @@ jobs:
           HOTEL_AGENT_GOOGLEPLACES_ENABLED: 'false'
           HOTEL_AGENT_RESEND_ENABLED: 'false'
           OPENAI_API_KEY: not-set
+          SPRING_AI_OPENAI_BASE_URL: http://localhost:4010/v1
+          SPRING_AI_OPENAI_API_KEY: sk-e2e-mock
         run: |
           JAR=""
           for f in backend/target/hotel-reservation-agent-*.jar; do
@@ -187,6 +196,7 @@ jobs:
         if: always()
         run: |
           if [ -f app.pid ]; then kill "$(cat app.pid)" 2>/dev/null || true; fi
+          if [ -f mock-openai.pid ]; then kill "$(cat mock-openai.pid)" 2>/dev/null || true; fi
 
       - name: Upload Playwright report
         if: failure()
@@ -197,5 +207,6 @@ jobs:
             e2e/playwright-report
             e2e/test-results
             app.log
+            mock-openai.log
           retention-days: 14
           if-no-files-found: ignore
