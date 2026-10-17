@@ -44,7 +44,14 @@ public class NotificationService {
 
     /** @return true if the provider accepted the message (not proof of delivery) */
     public boolean sendReport(ReportComposer.ReportInput input) {
-        EmailProvider.Email email = composer.compose(input, recordings.linkTextFor(reportedCall(input)));
+        EmailProvider.Email email;
+        try {
+            email = composer.compose(input, recordings.linkTextFor(reportedCall(input)));
+        } catch (RuntimeException e) {
+            // Never let a report bug cost the email: send the essentials instead.
+            log.error("task={} report composition failed, sending the fallback report", input.task().id(), e);
+            email = composer.fallback(input);
+        }
         try {
             String messageId = emailProvider.send(email).get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             deliveries.save(new EmailDelivery(UUID.randomUUID(), input.task().id(), email.to(), messageId,
