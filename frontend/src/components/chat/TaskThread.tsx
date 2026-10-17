@@ -94,7 +94,9 @@ export function TaskThread({ state, hasIntake }: TaskThreadProps) {
           <p>
             {task.report.sentAt
               ? `This is the email I sent${task.report.to ? ` to ${task.report.to}` : ""}, exactly as it went out.`
-              : "This is the result email. It hasn't been sent yet; its status is shown on the card."}
+              : task.report.deliveryStatus?.toUpperCase() === "FAILED"
+                ? "This is the result email. It could not be sent; everything in it is shown here."
+                : "This is the result email. It hasn't been sent yet; its status is shown on the card."}
           </p>
           <EmailPreview report={task.report} />
         </AgentMessage>
