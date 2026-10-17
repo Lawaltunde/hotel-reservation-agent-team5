@@ -3,6 +3,7 @@ package com.reservationagent.hotelreservationagent.application.port.out;
 import com.reservationagent.hotelreservationagent.domain.transcript.TranscriptTurn;
 import com.reservationagent.hotelreservationagent.domain.webhook.WebhookProvider;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,7 +16,9 @@ public interface WebhookPayloadParser {
                        Optional<EmailStatusChanged> emailStatusChanged) {
     }
 
-    record CallCompleted(String conversationId, List<TranscriptTurn> turns, boolean callSucceeded, String failureReason) {
+    /** {@code endedAt} is when the provider says the call ended, or {@code null} if it did not say. */
+    record CallCompleted(String conversationId, List<TranscriptTurn> turns, boolean callSucceeded, String failureReason,
+                         Instant endedAt) {
     }
 
     record EmailStatusChanged(String providerMessageId, String status) {

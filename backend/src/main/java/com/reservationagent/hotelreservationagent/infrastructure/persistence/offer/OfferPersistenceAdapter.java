@@ -3,6 +3,7 @@ package com.reservationagent.hotelreservationagent.infrastructure.persistence.of
 import com.reservationagent.hotelreservationagent.application.port.out.OfferRepository;
 import com.reservationagent.hotelreservationagent.domain.offer.HotelOffer;
 import com.reservationagent.hotelreservationagent.domain.offer.PriceBreakdown;
+import com.reservationagent.hotelreservationagent.domain.offer.QuoteValidity;
 import com.reservationagent.hotelreservationagent.domain.shared.Money;
 import org.springframework.stereotype.Repository;
 
@@ -44,7 +45,9 @@ class OfferPersistenceAdapter implements OfferRepository {
         e.cancellationTerms = o.cancellationTerms();
         e.depositTerms = o.depositTerms();
         e.enquiryId = o.enquiryId();
-        e.quoteValidUntil = o.quoteValidUntil();
+        e.quoteValidUntil = o.quoteValidity().validUntil();
+        e.quoteValidityText = o.quoteValidity().statedText();
+        e.quoteValidityHours = o.quoteValidity().statedHours();
         e.holdsRoom = o.holdsRoom();
         e.evidenceStatus = o.evidenceStatus();
         e.receivedAt = o.receivedAt();
@@ -62,7 +65,7 @@ class OfferPersistenceAdapter implements OfferRepository {
                 money(e.mandatoryFees), money(e.optionalFees), money(e.allInTotal), e.taxInclusion);
         return new HotelOffer(e.id, e.taskId, e.hotelId, e.callId, e.availabilityConfirmed, e.checkIn, e.checkOut,
                 e.roomType, e.guestCount, money(e.initialQuotedTotal), p, e.cancellationTerms, e.depositTerms,
-                e.enquiryId, e.quoteValidUntil, e.holdsRoom, e.evidenceStatus, e.receivedAt);
+                e.enquiryId, new QuoteValidity(e.quoteValidityText, e.quoteValidityHours, e.quoteValidUntil), e.holdsRoom, e.evidenceStatus, e.receivedAt);
     }
 
     private static BigDecimal amount(Money m) {

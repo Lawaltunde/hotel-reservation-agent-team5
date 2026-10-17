@@ -43,6 +43,8 @@ class HotelOfferEntity {
     String depositTerms;
     String enquiryId;
     Instant quoteValidUntil;
+    String quoteValidityText;
+    BigDecimal quoteValidityHours;
     boolean holdsRoom;
     @Enumerated(EnumType.STRING)
     EvidenceStatus evidenceStatus;

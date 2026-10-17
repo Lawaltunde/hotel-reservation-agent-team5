@@ -25,11 +25,20 @@ public record HotelOffer(
         String cancellationTerms,
         String depositTerms,
         String enquiryId,
-        Instant quoteValidUntil,
+        QuoteValidity quoteValidity,
         boolean holdsRoom,
         EvidenceStatus evidenceStatus,
         Instant receivedAt
 ) {
+
+    public HotelOffer {
+        quoteValidity = quoteValidity == null ? QuoteValidity.UNKNOWN : quoteValidity;
+    }
+
+    /** When the quote expires, computed from the call end; {@code null} if the hotel gave no period. */
+    public Instant quoteValidUntil() {
+        return quoteValidity.validUntil();
+    }
 
     public Money savings() {
         return negotiated.comparableTotal()

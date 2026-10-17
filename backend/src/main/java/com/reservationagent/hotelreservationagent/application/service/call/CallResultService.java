@@ -13,6 +13,7 @@ import com.reservationagent.hotelreservationagent.domain.call.PhoneCall;
 import com.reservationagent.hotelreservationagent.domain.offer.EvidenceStatus;
 import com.reservationagent.hotelreservationagent.domain.offer.HotelOffer;
 import com.reservationagent.hotelreservationagent.domain.offer.PriceBreakdown;
+import com.reservationagent.hotelreservationagent.domain.offer.QuoteValidity;
 import com.reservationagent.hotelreservationagent.domain.offer.TaxInclusion;
 import com.reservationagent.hotelreservationagent.domain.shared.Money;
 import com.reservationagent.hotelreservationagent.domain.task.BookingTask;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -61,21 +63,22 @@ public class CallResultService {
         Transcript transcript = transcripts.save(new Transcript(UUID.randomUUID(), call.id(), completed.turns(),
                 clock.instant().plus(TRANSCRIPT_RETENTION)));
 
+        Instant endedAt = completed.endedAt() == null ? clock.instant() : completed.endedAt();
         CallOutcome outcome = CallOutcome.CALL_DROPPED;
         if (completed.callSucceeded() && !transcript.turns().isEmpty()) {
             ExtractedOffer extracted = extractor.extract(transcript.asPlainText(), task.stay());
             outcome = extracted.callOutcome() == null ? CallOutcome.UNKNOWN : extracted.callOutcome();
             if (outcome == CallOutcome.OFFER_RECEIVED && "CAD".equalsIgnoreCase(extracted.currency())) {
-                offers.save(toOffer(task, call, extracted));
+                offers.save(toOffer(task, call, extracted, endedAt));
             }
         }
         calls.save(new PhoneCall(call.id(), call.taskId(), call.hotelId(), call.dialledNumber(), call.providerCallId(),
                 call.conversationId(), completed.callSucceeded() ? CallStatus.COMPLETED : CallStatus.FAILED, outcome,
-                call.startedAt(), clock.instant(), completed.failureReason()));
+                call.startedAt(), endedAt, completed.failureReason()));
         return Optional.of(task.id());
     }
 
-    private HotelOffer toOffer(BookingTask task, PhoneCall call, ExtractedOffer e) {
+    private HotelOffer toOffer(BookingTask task, PhoneCall call, ExtractedOffer e, Instant callEndedAt) {
         PriceBreakdown breakdown = new PriceBreakdown(money(e.roomSubtotal()), money(e.hst()),
                 money(e.municipalAccommodationTax()), money(e.mandatoryFees()), money(e.optionalFees()),
                 money(e.allInTotal()), taxInclusion(e.taxesIncludedInQuote()));
@@ -85,7 +88,8 @@ public class CallResultService {
         return new HotelOffer(UUID.randomUUID(), task.id(), call.hotelId(), call.id(),
                 Boolean.TRUE.equals(e.availabilityConfirmed()), e.checkIn(), e.checkOut(), e.roomType(),
                 e.guestCount() == null ? 0 : e.guestCount(), money(e.initialQuotedTotal()), breakdown,
-                e.cancellationTerms(), e.depositTerms(), e.enquiryId(), e.quoteValidUntil(),
+                e.cancellationTerms(), e.depositTerms(), e.enquiryId(),
+                QuoteValidity.stated(e.quoteValidityText(), e.quoteValidityHours(), callEndedAt),
                 Boolean.TRUE.equals(e.roomHeld()), evidence, clock.instant());
     }
 
