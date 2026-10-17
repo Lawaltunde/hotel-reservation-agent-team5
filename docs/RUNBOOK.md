@@ -166,8 +166,10 @@ Warning signs:
     submit the prompt again.
   - Gmail `535 Authentication failed` means the app password is wrong, or 2-Step Verification is off.
 - **App restarts mid-run:** a task already in CALLING_FOR_QUOTES continues: its webhooks still arrive and the
-  watchdog finishes it at the deadline. A task that was still searching (DISCOVERING/RANKING) is **not**
-  resumed and ends DEADLINE_EXCEEDED without an email, so submit the prompt again.
+  watchdog finishes it (even past the deadline, it emails the best result so far). A task stranded before the
+  calls is picked up within about 2 minutes. If it was still VALIDATING it starts again; if it was
+  DISCOVERING/RANKING, a "no result" report is emailed (log: `stranded in … (restart?)`). Resubmit the prompt
+  for a fresh search.
 - **The tunnel URL changed:** update `APP_PUBLIC_BASE_URL` (restart) and the ElevenLabs webhook URL,
   otherwise call results never arrive.
 
