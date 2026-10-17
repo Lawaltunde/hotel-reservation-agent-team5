@@ -15,12 +15,11 @@ concurrency:
 
 jobs:
   backend:
-    name: Backend (Maven verify)
+    # Root reactor build: the frontend module builds the Next.js export (Node is downloaded by
+    # frontend-maven-plugin) and the backend packages it, so this job proves the single jar works.
+    name: Full build (Maven verify)
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    defaults:
-      run:
-        working-directory: hotel-reservation-agent
     steps:
       - uses: actions/checkout@v5
 
@@ -42,8 +41,8 @@ jobs:
         with:
           name: backend-test-reports
           path: |
-            hotel-reservation-agent/target/surefire-reports
-            hotel-reservation-agent/target/failsafe-reports
+            backend/target/surefire-reports
+            backend/target/failsafe-reports
           if-no-files-found: ignore
 
   frontend:

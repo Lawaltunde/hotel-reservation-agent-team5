@@ -1,22 +1,18 @@
+import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 import type { NextConfig } from "next";
 
-// Where the Spring Boot backend listens. The browser only talks to this Next.js
-// server; requests to /api/* are proxied to the backend, so there is no CORS
-// setup and no backend URL baked into client bundles.
-const backendUrl = (process.env.BACKEND_URL ?? "http://localhost:8080").replace(
-  /\/+$/,
-  "",
-);
+// Production: a static export (out/) that the frontend Maven module packages into the
+// Spring Boot jar, so the UI and /api are served from the same origin by one process.
+// Development (`npm run dev`): /api/* is proxied to the backend for hot reload on :3000.
+const backendUrl = (process.env.BACKEND_URL ?? "http://localhost:8080").replace(/\/+$/, "");
 
-const nextConfig: NextConfig = {
-  async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${backendUrl}/api/:path*`,
+export default function nextConfig(phase: string): NextConfig {
+  if (phase === PHASE_DEVELOPMENT_SERVER) {
+    return {
+      async rewrites() {
+        return [{ source: "/api/:path*", destination: `${backendUrl}/api/:path*` }];
       },
-    ];
-  },
-};
-
-export default nextConfig;
+    };
+  }
+  return { output: "export" };
+}
