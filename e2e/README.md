@@ -7,7 +7,7 @@ These tests drive the **packaged app**: one Spring Boot process that serves the 
 | Spec | What it covers | State |
 |---|---|---|
 | `tests/smoke.spec.ts` | Home page title, `GET /api/health` is UP, backend indicator says "online" | runs |
-| `tests/enquiry-flow.spec.ts` | Ottawa enquiry to `COMPLETED` (NO_CANDIDATES path, no "booked" wording); Vancouver → 422 in the UI and the API | `test.fixme` until the phase 2 backend and frontend PRs merge |
+| `tests/enquiry-flow.spec.ts` | Ottawa enquiry in the UI runs to `COMPLETED` / `NO_ELIGIBLE_HOTELS` with no "booked" wording; Vancouver → 422 in the UI and the API; 400 for a past check-in; SSE stream ends at `COMPLETED`; autocomplete is Ontario-only | runs (needs a fresh database, see below) |
 
 ## Run locally
 
@@ -35,6 +35,11 @@ SPRING_DATASOURCE_USERNAME=hotelagent SPRING_DATASOURCE_PASSWORD=hotelagent \
 SPRING_DOCKER_COMPOSE_ENABLED=false \
 java -jar backend/target/hotel-reservation-agent-0.0.1-SNAPSHOT.jar
 ```
+
+The enquiry specs expect an **empty hotel index**, so every Ontario search ends with
+`NO_ELIGIBLE_HOTELS`. Use a fresh database (CI's service container always is); with Compose,
+`docker compose -f backend/compose.yaml down -v` before starting. Leave `ELEVENLABS_ENABLED`
+and `RESEND_ENABLED` unset so no real calls or emails are made.
 
 ### 2. Run the tests (in another terminal)
 
