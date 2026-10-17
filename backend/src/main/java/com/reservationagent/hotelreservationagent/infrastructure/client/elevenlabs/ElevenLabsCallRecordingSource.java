@@ -22,7 +22,8 @@ class ElevenLabsCallRecordingSource implements CallRecordingSource {
 
     /** A 4-minute call is a few MB of MP3; this leaves ample room. */
     private static final int MAX_AUDIO_BYTES = 32 * 1024 * 1024;
-    private static final Duration TIMEOUT = Duration.ofSeconds(30);
+    /** Kept below the report's audio wait so one slow attempt cannot use it all. */
+    private static final Duration TIMEOUT = Duration.ofSeconds(12);
 
     private final WebClient client;
 

@@ -15,4 +15,9 @@ class NoCallRecordingSource implements CallRecordingSource {
     public Optional<CallRecording> fetch(String conversationId) {
         return Optional.empty();
     }
+
+    @Override
+    public boolean isEnabled() {
+        return false;
+    }
 }

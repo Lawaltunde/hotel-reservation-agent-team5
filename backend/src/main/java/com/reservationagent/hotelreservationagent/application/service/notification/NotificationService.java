@@ -1,6 +1,8 @@
 package com.reservationagent.hotelreservationagent.application.service.notification;
 
 import com.reservationagent.hotelreservationagent.application.port.out.AiUsageRepository;
+import com.reservationagent.hotelreservationagent.application.port.out.CallRecordingSource.CallRecording;
+import com.reservationagent.hotelreservationagent.application.port.out.CallRecordingSource;
 import com.reservationagent.hotelreservationagent.application.port.out.EmailDeliveryRepository;
 import com.reservationagent.hotelreservationagent.application.port.out.EmailProvider;
 import com.reservationagent.hotelreservationagent.application.port.out.HotelIndex;
@@ -22,6 +24,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
+import java.util.concurrent.CompletableFuture;
+import java.util.Optional;
+import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -46,14 +51,20 @@ public class NotificationService {
     private final ReportRepository reports;
     private final CallRecordingService recordings;
     private final String conversationUrlTemplate;
+    private final CallRecordingSource recordingSource;
+    private final Duration audioWait;
+    private final java.util.concurrent.Executor audioExecutor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor();
     private final Clock clock;
 
     public NotificationService(ReportComposer composer, EmailProvider emailProvider, EmailDeliveryRepository deliveries,
                                PhoneCallRepository calls, OfferRepository offers, HotelIndex hotels,
                                AiUsageRepository usage, ReportRepository reports, CallRecordingService recordings,
-                               @Value("${app.report.conversation-url-template:https://elevenlabs.io/app/conversational-ai/history/{conversationId}}")
+                               @Value("${app.report.conversation-url-template:https://elevenlabs.io/app/agents/history/{conversationId}}")
                                String conversationUrlTemplate,
-                               Clock clock) {
+                               Clock clock, CallRecordingSource recordingSource,
+                               @Value("${app.report.audio-wait:PT20S}") Duration audioWait) {
+        this.recordingSource = recordingSource;
+        this.audioWait = audioWait;
         this.composer = composer;
         this.emailProvider = emailProvider;
         this.deliveries = deliveries;
@@ -112,7 +123,7 @@ public class NotificationService {
     private void storeWithoutCc(UUID taskId, SentReport r) {
         try {
             reports.save(taskId, new SentReport(r.subject(), r.from(), r.to(), List.of(), r.bodyText(), r.bodyHtml(),
-                    r.fields(), r.tokens(), r.transcripts(), r.composedAt()));
+                    r.fields(), r.tokens(), r.transcripts(), r.composedAt(), r.attachments()));
         } catch (RuntimeException e) {
             log.error("task={} could not update the report snapshot: {}", taskId, e.getMessage());
         }
@@ -164,7 +175,51 @@ public class NotificationService {
                         offerByCall.get(call.id()), transcriptByCall.get(call.id()), recordings.issueFor(call),
                         conversationUrl(call)))
                 .toList();
-        return new ReportContext(evidence, usage.totals(taskId));
+        UUID chosenCall = input.bestOffer() == null ? null : input.bestOffer().callId();
+        return new ReportContext(evidence, usage.totals(taskId),
+                fetchAudio(ReportComposer.attachableCalls(evidence, chosenCall)));
+    }
+
+    /**
+     * Downloads the recordings to attach, all in parallel. ElevenLabs can lag the post-call webhook by
+     * a few seconds, so each fetch retries every 2 s until {@code audioWait}; whatever is not there by
+     * then is linked instead, so the email is never held longer than that.
+     */
+    private Map<UUID, CallRecording> fetchAudio(List<CallEvidence> calls) {
+        if (!recordingSource.isEnabled()) {
+            return Map.of();
+        }
+        long giveUp = System.nanoTime() + audioWait.toNanos();
+        Map<UUID, CompletableFuture<Optional<CallRecording>>> pending = new java.util.LinkedHashMap<>();
+        for (CallEvidence c : calls) {
+            if (c.call().conversationId() == null) continue;
+            pending.put(c.call().id(), CompletableFuture
+                    .supplyAsync(() -> fetchWithRetry(c.call().conversationId(), giveUp), audioExecutor)
+                    .completeOnTimeout(Optional.empty(), audioWait.toMillis() + 1000, TimeUnit.MILLISECONDS)
+                    .exceptionally(e -> Optional.empty()));
+        }
+        Map<UUID, CallRecording> audio = new java.util.HashMap<>();
+        pending.forEach((callId, future) -> future.join().ifPresent(r -> audio.put(callId, r)));
+        return audio;
+    }
+
+    /** Uses the monotonic clock: the injected Clock may be fixed (tests) and must not stretch the wait. */
+    private Optional<CallRecording> fetchWithRetry(String conversationId, long giveUp) {
+        while (true) {
+            try {
+                Optional<CallRecording> r = recordingSource.fetch(conversationId);
+                if (r.isPresent() && r.get().audio().length > 0) return r;
+            } catch (RuntimeException e) {
+                log.debug("conversation={} audio not ready: {}", conversationId, e.getMessage());
+            }
+            if (System.nanoTime() + 2_000_000_000L >= giveUp) return Optional.empty();
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return Optional.empty();
+            }
+        }
     }
 
     private String conversationUrl(PhoneCall call) {

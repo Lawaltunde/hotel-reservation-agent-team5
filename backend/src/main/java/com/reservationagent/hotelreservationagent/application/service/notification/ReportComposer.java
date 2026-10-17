@@ -2,6 +2,9 @@ package com.reservationagent.hotelreservationagent.application.service.notificat
 
 import com.reservationagent.hotelreservationagent.application.port.out.AiUsageRepository;
 import com.reservationagent.hotelreservationagent.application.port.out.EmailProvider.Email;
+import com.reservationagent.hotelreservationagent.domain.call.CallOutcome;
+import com.reservationagent.hotelreservationagent.application.port.out.CallRecordingSource.CallRecording;
+import com.reservationagent.hotelreservationagent.application.port.out.EmailProvider.Attachment;
 import com.reservationagent.hotelreservationagent.application.service.recording.CallRecordingService.IssuedLink;
 import com.reservationagent.hotelreservationagent.domain.call.PhoneCall;
 import com.reservationagent.hotelreservationagent.domain.hotel.Hotel;
@@ -20,6 +23,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
+import java.text.Normalizer;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import java.time.Clock;
 import java.util.Comparator;
 import java.util.List;
@@ -83,8 +92,89 @@ public class ReportComposer {
                               Reservation reservation, List<Transcript> transcripts, int screened, int called) {
     }
 
-    /** Everything about the calls that the report shows as evidence. */
-    public record ReportContext(List<CallEvidence> calls, AiUsageRepository.Totals usage) {
+    /**
+     * Everything about the calls that the report shows as evidence.
+     *
+     * @param audio the recordings fetched in time, by call ID; a call missing here gets a link instead
+     */
+    public record ReportContext(List<CallEvidence> calls, AiUsageRepository.Totals usage,
+                                Map<UUID, CallRecording> audio) {
+        public ReportContext {
+            audio = audio == null ? Map.of() : Map.copyOf(audio);
+        }
+
+        public ReportContext(List<CallEvidence> calls, AiUsageRepository.Totals usage) {
+            this(calls, usage, Map.of());
+        }
+    }
+
+    /** Attachments stay under this so the email fits Gmail's 25 MB limit after base64 encoding. */
+    public static final long MAX_ATTACHMENT_BYTES = 18L * 1024 * 1024;
+
+    /**
+     * The calls whose audio and transcript are attached, chosen hotel first, then the other answered
+     * calls in call order. Voicemail and calls without a transcript are skipped.
+     */
+    public static List<CallEvidence> attachableCalls(List<CallEvidence> calls, UUID chosenCallId) {
+        List<CallEvidence> answered = calls.stream()
+                .filter(c -> c.transcript() != null && !c.transcript().turns().isEmpty())
+                .filter(c -> c.call().outcome() != CallOutcome.VOICEMAIL)
+                .toList();
+        List<CallEvidence> ordered = new ArrayList<>();
+        answered.stream().filter(c -> c.call().id().equals(chosenCallId)).forEach(ordered::add);
+        answered.stream().filter(c -> !c.call().id().equals(chosenCallId)).forEach(ordered::add);
+        return ordered;
+    }
+
+    /** The files to attach and a note for each recording that could not be attached. */
+    record AttachmentPlan(List<Attachment> files, List<String> notes) {
+    }
+
+    private static AttachmentPlan plan(ReportContext ctx, Optional<CallEvidence> chosen) {
+        List<Attachment> files = new ArrayList<>();
+        List<String> notes = new ArrayList<>();
+        long total = 0;
+        int n = 0;
+        for (CallEvidence c : attachableCalls(ctx.calls(), chosen.map(e -> e.call().id()).orElse(null))) {
+            n++;
+            String hotelName = c.hotel() == null ? "hotel" : c.hotel().name();
+            String base = "call-" + n + "-" + slug(hotelName);
+            byte[] transcript = timedTranscript(c.transcript()).getBytes(StandardCharsets.UTF_8);
+            CallRecording audio = ctx.audio().get(c.call().id());
+            String link = c.recording().url() != null ? c.recording().url() : c.recording().text();
+            if (audio == null) {
+                notes.add(hotelName + ": recording not yet available from ElevenLabs; link: " + link);
+            } else if (total + audio.audio().length + transcript.length > MAX_ATTACHMENT_BYTES) {
+                notes.add(hotelName + ": recording not attached (email size limit); link: " + link);
+            } else {
+                files.add(new Attachment(base + ".mp3", "audio/mpeg", audio.audio()));
+                total += audio.audio().length;
+            }
+            if (total + transcript.length <= MAX_ATTACHMENT_BYTES) {
+                files.add(new Attachment(base + "-transcript.txt", "text/plain", transcript));
+                total += transcript.length;
+            }
+        }
+        return new AttachmentPlan(files, notes);
+    }
+
+    /** "[mm:ss] Agent: ..." lines. */
+    static String timedTranscript(Transcript transcript) {
+        StringBuilder s = new StringBuilder();
+        for (TranscriptTurn turn : transcript.turns()) {
+            long secs = turn.offset() == null ? 0 : turn.offset().toSeconds();
+            s.append(String.format("[%02d:%02d] ", secs / 60, secs % 60))
+                    .append(turn.speaker() == TranscriptTurn.Speaker.AGENT ? "Agent: " : "Hotel: ")
+                    .append(turn.text()).append('\n');
+        }
+        return s.toString();
+    }
+
+    static String slug(String name) {
+        String s = Normalizer.normalize(name, Normalizer.Form.NFD).replaceAll("\\p{M}", "")
+                .toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", "");
+        if (s.length() > 40) s = s.substring(0, 40).replaceAll("-$", "");
+        return s.isEmpty() ? "hotel" : s;
     }
 
     /** One call: who was called, what they quoted (if anything), and links to the recording. */
@@ -157,6 +247,13 @@ public class ReportComposer {
                         c.call().conversationId(), c.conversationUrl(), c.recording().url(), c.call().startedAt(),
                         c.transcript().asPlainText()))
                 .toList();
+        AttachmentPlan attachments = plan(ctx, chosen);
+        if (!attachments.files().isEmpty() || !attachments.notes().isEmpty()) {
+            b.append("\nAttachments: ").append(attachments.files().isEmpty() ? "none"
+                    : attachments.files().stream().map(Attachment::filename).collect(Collectors.joining(", "))).append('\n');
+            attachments.notes().forEach(note -> b.append(note).append('\n'));
+        }
+
         b.append("\nCall transcripts\n");
         if (transcripts.isEmpty()) {
             b.append("No call transcripts.\n");
@@ -171,7 +268,7 @@ public class ReportComposer {
 
         Recipients recipients = recipients(t);
         String body = b.toString();
-        Email email = new Email(recipients.to(), recipients.cc(), subject, body, List.of());
+        Email email = new Email(recipients.to(), recipients.cc(), subject, body, attachments.files());
         SentReport.Fields fields = new SentReport.Fields(
                 hotel == null ? null : hotel.name(),
                 hotel == null ? null : hotel.address(),
@@ -184,7 +281,7 @@ public class ReportComposer {
                 chosen.map(CallEvidence::conversationUrl).orElse(null));
         SentReport report = new SentReport(subject, from, recipients.to(), recipients.cc(), body, null, fields,
                 new SentReport.Tokens(usage.promptTokens(), usage.completionTokens(), usage.callSeconds()),
-                transcripts, clock.instant());
+                transcripts, clock.instant(), attachments.files().stream().map(Attachment::filename).toList());
         return new Composed(email, report);
     }
 
@@ -207,7 +304,7 @@ public class ReportComposer {
         Recipients recipients = recipients(t);
         Email email = new Email(recipients.to(), recipients.cc(), subject(false), body.toString(), List.of());
         SentReport report = new SentReport(subject(false), from, recipients.to(), recipients.cc(), body.toString(), null,
-                null, null, List.of(), clock.instant());
+                null, null, List.of(), clock.instant(), List.of());
         return new Composed(email, report);
     }
 
