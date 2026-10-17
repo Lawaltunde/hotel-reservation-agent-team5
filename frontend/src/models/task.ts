@@ -142,6 +142,11 @@ export interface Offer {
   taxInclusion: TaxInclusion | null;
   cancellationTerms: string | null;
   depositTerms: string | null;
+  /** The price offers are ranked by: the all-in total, or an estimate when `estimated` is true. */
+  price?: number | null;
+  /** True when `price` is an estimate (HST added to a pre-tax rate), not a figure the hotel stated. */
+  estimated?: boolean | null;
+  priceBasis?: "SUM_OF_STATED_PARTS" | "STATED_ALL_IN" | "ESTIMATED_HST" | (string & {}) | null;
   /** The hotel's enquiry/quote reference. This is NOT a booking confirmation. */
   enquiryId: string | null;
   /** ISO-8601 instant: call end plus the period the hotel stated; `null` when no period was given. */
