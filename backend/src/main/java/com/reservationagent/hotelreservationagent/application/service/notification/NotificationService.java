@@ -1,23 +1,34 @@
 package com.reservationagent.hotelreservationagent.application.service.notification;
 
+import com.reservationagent.hotelreservationagent.application.port.out.AiUsageRepository;
 import com.reservationagent.hotelreservationagent.application.port.out.EmailDeliveryRepository;
 import com.reservationagent.hotelreservationagent.application.port.out.EmailProvider;
+import com.reservationagent.hotelreservationagent.application.port.out.HotelIndex;
+import com.reservationagent.hotelreservationagent.application.port.out.OfferRepository;
 import com.reservationagent.hotelreservationagent.application.port.out.PhoneCallRepository;
+import com.reservationagent.hotelreservationagent.application.port.out.ReportRepository;
+import com.reservationagent.hotelreservationagent.application.service.notification.ReportComposer.CallEvidence;
+import com.reservationagent.hotelreservationagent.application.service.notification.ReportComposer.Composed;
+import com.reservationagent.hotelreservationagent.application.service.notification.ReportComposer.ReportContext;
 import com.reservationagent.hotelreservationagent.application.service.recording.CallRecordingService;
-import com.reservationagent.hotelreservationagent.domain.call.CallStatus;
 import com.reservationagent.hotelreservationagent.domain.call.PhoneCall;
 import com.reservationagent.hotelreservationagent.domain.notification.EmailDelivery;
 import com.reservationagent.hotelreservationagent.domain.notification.EmailStatus;
+import com.reservationagent.hotelreservationagent.domain.offer.HotelOffer;
+import com.reservationagent.hotelreservationagent.domain.transcript.Transcript;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class NotificationService {
@@ -29,58 +40,84 @@ public class NotificationService {
     private final EmailProvider emailProvider;
     private final EmailDeliveryRepository deliveries;
     private final PhoneCallRepository calls;
+    private final OfferRepository offers;
+    private final HotelIndex hotels;
+    private final AiUsageRepository usage;
+    private final ReportRepository reports;
     private final CallRecordingService recordings;
+    private final String conversationUrlTemplate;
     private final Clock clock;
 
     public NotificationService(ReportComposer composer, EmailProvider emailProvider, EmailDeliveryRepository deliveries,
-                               PhoneCallRepository calls, CallRecordingService recordings, Clock clock) {
+                               PhoneCallRepository calls, OfferRepository offers, HotelIndex hotels,
+                               AiUsageRepository usage, ReportRepository reports, CallRecordingService recordings,
+                               @Value("${app.report.conversation-url-template:https://elevenlabs.io/app/conversational-ai/history/{conversationId}}")
+                               String conversationUrlTemplate,
+                               Clock clock) {
         this.composer = composer;
-        this.calls = calls;
-        this.recordings = recordings;
         this.emailProvider = emailProvider;
         this.deliveries = deliveries;
+        this.calls = calls;
+        this.offers = offers;
+        this.hotels = hotels;
+        this.usage = usage;
+        this.reports = reports;
+        this.recordings = recordings;
+        this.conversationUrlTemplate = conversationUrlTemplate;
         this.clock = clock;
     }
 
     /** @return true if the provider accepted the message (not proof of delivery) */
     public boolean sendReport(ReportComposer.ReportInput input) {
-        EmailProvider.Email email;
+        UUID taskId = input.task().id();
+        Composed composed;
         try {
-            email = composer.compose(input, recordings.linkTextFor(reportedCall(input)));
+            composed = composer.compose(input, context(input));
         } catch (RuntimeException e) {
             // Never let a report bug cost the email: send the essentials instead.
-            log.error("task={} report composition failed, sending the fallback report", input.task().id(), e);
-            email = composer.fallback(input);
+            log.error("task={} report composition failed, sending the fallback report", taskId, e);
+            composed = composer.fallback(input);
         }
         try {
+            reports.save(taskId, composed.report());
+        } catch (RuntimeException e) {
+            log.error("task={} could not store the report snapshot: {}", taskId, e.getMessage());
+        }
+        EmailProvider.Email email = composed.email();
+        try {
             String messageId = emailProvider.send(email).get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            deliveries.save(new EmailDelivery(UUID.randomUUID(), input.task().id(), email.to(), messageId,
+            deliveries.save(new EmailDelivery(UUID.randomUUID(), taskId, email.to(), messageId,
                     EmailStatus.ACCEPTED, clock.instant(), null, null));
             return true;
         } catch (Exception e) {
-            log.error("task={} report email failed: {}", input.task().id(), e.getMessage());
-            deliveries.save(new EmailDelivery(UUID.randomUUID(), input.task().id(), email.to(), null,
+            log.error("task={} report email failed: {}", taskId, e.getMessage());
+            deliveries.save(new EmailDelivery(UUID.randomUUID(), taskId, email.to(), null,
                     EmailStatus.FAILED, clock.instant(), null, null));
             return false;
         }
     }
 
-    /**
-     * The call whose recording the report links: the one that produced the selected offer, else the
-     * most recent call that reached a conversation.
-     */
-    private PhoneCall reportedCall(ReportComposer.ReportInput input) {
-        List<PhoneCall> taskCalls = calls.findByTask(input.task().id());
-        if (input.bestOffer() != null) {
-            Optional<PhoneCall> offerCall = taskCalls.stream()
-                    .filter(c -> c.id().equals(input.bestOffer().callId()))
-                    .findFirst();
-            if (offerCall.isPresent()) return offerCall.get();
+    /** The calls in the order they were placed, each with its hotel, offer, transcript and links. */
+    private ReportContext context(ReportComposer.ReportInput input) {
+        UUID taskId = input.task().id();
+        Map<UUID, HotelOffer> offerByCall = offers.findByTask(taskId).stream()
+                .collect(Collectors.toMap(HotelOffer::callId, Function.identity(), (a, b) -> b));
+        Map<UUID, Transcript> transcriptByCall = input.transcripts().stream()
+                .collect(Collectors.toMap(Transcript::callId, Function.identity(), (a, b) -> b));
+        List<CallEvidence> evidence = calls.findByTask(taskId).stream()
+                .sorted(Comparator.comparing(PhoneCall::startedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+                .map(call -> new CallEvidence(call, hotels.findById(call.hotelId()).orElse(null),
+                        offerByCall.get(call.id()), transcriptByCall.get(call.id()), recordings.issueFor(call),
+                        conversationUrl(call)))
+                .toList();
+        return new ReportContext(evidence, usage.totals(taskId));
+    }
+
+    private String conversationUrl(PhoneCall call) {
+        if (call.conversationId() == null || call.conversationId().startsWith("dev-")) {
+            return null;
         }
-        return taskCalls.stream()
-                .filter(c -> c.conversationId() != null && c.status() == CallStatus.COMPLETED)
-                .max(Comparator.comparing(PhoneCall::endedAt, Comparator.nullsFirst(Comparator.naturalOrder())))
-                .orElse(null);
+        return conversationUrlTemplate.replace("{conversationId}", call.conversationId());
     }
 
     public void updateStatus(String providerMessageId, EmailStatus status) {

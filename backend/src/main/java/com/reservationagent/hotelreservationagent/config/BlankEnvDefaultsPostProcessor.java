@@ -24,7 +24,7 @@ public class BlankEnvDefaultsPostProcessor implements EnvironmentPostProcessor, 
             "OPENAI_REASONING_EFFORT", new String[] {"spring.ai.openai.chat.reasoning-effort", "none"},
             "OPENAI_TEMPERATURE", new String[] {"spring.ai.openai.chat.temperature", "0.1"},
             "APP_INTAKE_DEFAULT_DEADLINE", new String[] {"app.intake.default-deadline", "PT30M"},
-            "APP_REPORT_TEAM_NUMBER", new String[] {"app.report.team-number", "5"},
+            "APP_REPORT_SUBJECT", new String[] {"app.report.subject", "Team 5 - Hotel Reservation Enquiry Result"},
             "APP_REPORT_RECORDING_LINK_TTL", new String[] {"app.report.recording-link-ttl", "P30D"});
 
     @Override
