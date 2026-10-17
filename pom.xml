@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+        Root aggregator for the Hotel Deal Agent. Open this folder in IntelliJ to get the whole
+        project (backend + frontend) as one Maven project.
+
+        ./mvnw package   builds the Next.js frontend, packages it into the backend jar,
+                         and produces one executable: backend/target/hotel-reservation-agent-*.jar
+    -->
+    <groupId>com.reservationagent</groupId>
+    <artifactId>hotel-reservation-agent-root</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>hotel-reservation-agent-root</name>
+
+    <modules>
+        <module>frontend</module>
+        <module>backend</module>
+    </modules>
+</project>

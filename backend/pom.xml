@@ -66,6 +66,14 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- The Next.js UI, served from classpath:/static/ (built by the frontend module) -->
+        <dependency>
+            <groupId>com.reservationagent</groupId>
+            <artifactId>hotel-reservation-agent-frontend</artifactId>
+            <version>${project.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
         <!-- ===== Test dependencies (owned by test branch) ===== -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
