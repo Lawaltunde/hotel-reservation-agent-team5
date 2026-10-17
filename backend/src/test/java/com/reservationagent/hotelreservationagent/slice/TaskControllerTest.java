@@ -455,7 +455,7 @@ class TaskControllerTest {
 
         String body = result.getResponse().getContentAsString();
         assertThat(body).startsWith("event:progress\ndata:")
-                .contains("\"status\":\"COMPLETED\"", "\"message\":\"Current status\"", "\"taskId\":\"" + task.id() + "\"");
+                .contains("\"status\":\"COMPLETED\"", "\"message\":\"Report email sent\"", "\"taskId\":\"" + task.id() + "\"");
         assertThat(body.split("event:progress", -1)).hasSize(2);
         verify(handle).close();
     }
