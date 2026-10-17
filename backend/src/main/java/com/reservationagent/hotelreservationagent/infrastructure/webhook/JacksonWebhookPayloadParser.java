@@ -8,6 +8,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -52,13 +53,24 @@ class JacksonWebhookPayloadParser implements WebhookPayloadParser {
                 }
                 boolean succeeded = !"failed".equals(data.path("status").asString());
                 yield new ParsedEvent(eventId, type,
-                        Optional.of(new CallCompleted(conversationId, turns, succeeded, succeeded ? null : "conversation failed")),
+                        Optional.of(new CallCompleted(conversationId, turns, succeeded, succeeded ? null : "conversation failed",
+                                callEnd(data.path("metadata")))),
                         Optional.empty());
             }
             case "call_initiation_failure" -> new ParsedEvent(eventId, type,
-                    Optional.of(new CallCompleted(conversationId, List.of(), false, data.path("failure_reason").asString("initiation failed"))),
+                    Optional.of(new CallCompleted(conversationId, List.of(), false, data.path("failure_reason").asString("initiation failed"), null)),
                     Optional.empty());
             default -> new ParsedEvent(eventId, type, Optional.empty(), Optional.empty());
         };
+    }
+
+    /** Call start plus duration from the post-call metadata, or {@code null} if either is missing. */
+    private static Instant callEnd(JsonNode metadata) {
+        JsonNode start = metadata.path("start_time_unix_secs");
+        JsonNode duration = metadata.path("call_duration_secs");
+        if (!start.isNumber() || !duration.isNumber()) {
+            return null;
+        }
+        return Instant.ofEpochSecond(start.asLong()).plusSeconds(duration.asLong());
     }
 }
