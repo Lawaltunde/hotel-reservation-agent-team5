@@ -2,49 +2,78 @@ package com.reservationagent.hotelreservationagent.application.service.notificat
 
 import com.reservationagent.hotelreservationagent.application.port.out.EmailProvider.Attachment;
 import com.reservationagent.hotelreservationagent.application.port.out.EmailProvider.Email;
+import com.reservationagent.hotelreservationagent.domain.geography.Municipality;
 import com.reservationagent.hotelreservationagent.domain.hotel.Hotel;
 import com.reservationagent.hotelreservationagent.domain.offer.HotelOffer;
 import com.reservationagent.hotelreservationagent.domain.reservation.Reservation;
 import com.reservationagent.hotelreservationagent.domain.shared.Money;
 import com.reservationagent.hotelreservationagent.domain.task.BookingTask;
+import com.reservationagent.hotelreservationagent.domain.task.StayDetails;
 import com.reservationagent.hotelreservationagent.domain.task.TaskOutcome;
 import com.reservationagent.hotelreservationagent.domain.transcript.Transcript;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * Builds the outcome-specific report (README §12). Unknown values are printed as unknown; a
- * reservation number appears only for a confirmed booking.
+ * Builds the outcome-specific report (README §12). The first block holds the fields the competition
+ * requires, in its order; the details below it keep the honest status. Unknown values are printed
+ * as unknown; a reservation number appears only for a confirmed booking.
  */
 @Component
 public class ReportComposer {
 
     private static final String UNKNOWN = "Unknown";
 
+    private final int teamNumber;
+    private final String reportRecipient;
+
+    public ReportComposer(@Value("${app.report.team-number:5}") int teamNumber,
+                          @Value("${app.report.recipient:}") String reportRecipient) {
+        this.teamNumber = teamNumber;
+        this.reportRecipient = reportRecipient == null ? "" : reportRecipient.strip();
+    }
+
     public record ReportInput(BookingTask task, String city, TaskOutcome outcome, HotelOffer bestOffer, Hotel hotel,
                               Reservation reservation, List<Transcript> transcripts, int screened, int called) {
     }
 
-    public Email compose(ReportInput in) {
+    /** Who gets the report. */
+    public record Recipients(String to, List<String> cc) {
+    }
+
+    /**
+     * @param recordingLine the audio link for the selected hotel's call, or why there is none
+     */
+    public Email compose(ReportInput in, String recordingLine) {
         BookingTask t = in.task();
         HotelOffer o = in.bestOffer();
         boolean booked = in.reservation() != null && in.reservation().isConfirmed();
+        String transcriptText = in.transcripts().stream()
+                .map(Transcript::asPlainText)
+                .filter(Objects::nonNull)
+                .collect(Collectors.joining("\n\n---\n\n"));
 
-        String subject = "Hotel negotiation result — %s, ON — %s to %s".formatted(in.city(), t.stay().checkIn(), t.stay().checkOut());
         String body = """
                 Hello,
 
                 Here is the result of your hotel-rate enquiry.
 
+                Hotel Name: %s
+                Hotel Address: %s
+                Hotel Phone: %s
+                Reservation #: %s
+                Reservation Date: %s
+                Price for the stay: %s
+                Link To Audio Recording: %s
+
                 Status: %s
-                Hotel: %s
-                Address: %s
-                Phone: %s
-                Stay: %s to %s | %d room(s) | %d guest(s)
+                Stay: %d room(s) | %d guest(s)
                 Room type: %s
                 Initial phone quote: %s
                 Best negotiated all-in total (CAD): %s
@@ -54,11 +83,10 @@ public class ReportComposer {
                 Cancellation / payment terms: %s
                 Offer expiry: %s
                 Hotel enquiry/reference ID: %s
-                Reservation confirmation #: %s
                 Hotel-issued confirmation: %s
                 Hotels screened / called: %d / %d
 
-                The full call transcript(s) are attached.
+                %s
 
                 Important: an enquiry ID or negotiated quote is not a confirmed booking.
                 %s
@@ -68,11 +96,15 @@ public class ReportComposer {
                 Regards,
                 Hotel Deal Agent
                 """.formatted(
-                in.outcome(),
                 in.hotel() == null ? "None selected" : in.hotel().name(),
                 in.hotel() == null ? UNKNOWN : orUnknown(in.hotel().address()),
                 in.hotel() == null || in.hotel().bestPhone() == null ? UNKNOWN : in.hotel().bestPhone().e164(),
-                t.stay().checkIn(), t.stay().checkOut(), t.stay().rooms(), t.stay().guests(),
+                booked ? in.reservation().confirmationNumber() : "Not booked (no reservation was made)",
+                reservationDate(t.stay(), booked ? in.reservation() : null),
+                price(o, booked ? in.reservation() : null),
+                recordingLine,
+                in.outcome(),
+                t.stay().rooms(), t.stay().guests(),
                 o == null ? UNKNOWN : orUnknown(o.roomType()),
                 o == null ? UNKNOWN : money(o.initialQuotedTotal()),
                 o == null ? UNKNOWN : o.negotiated().comparableTotal().map(Money::toString).orElse(UNKNOWN),
@@ -85,18 +117,61 @@ public class ReportComposer {
                 o == null ? UNKNOWN : orUnknown(o.cancellationTerms()) + " / " + orUnknown(o.depositTerms()),
                 o == null ? UNKNOWN : expiry(o),
                 o == null || o.enquiryId() == null ? "Not provided" : o.enquiryId(),
-                booked ? in.reservation().confirmationNumber() : "Not booked",
                 o == null ? "Not received" : o.evidenceStatus().toString(),
                 in.screened(), in.called(),
+                transcriptText.isBlank() ? "No call transcripts." : "The full call transcript(s) are attached.",
                 booked ? "" : nextStep(t, in.outcome()));
 
-        String transcriptText = in.transcripts().stream()
-                .map(Transcript::asPlainText)
-                .filter(Objects::nonNull)
-                .collect(Collectors.joining("\n\n---\n\n"));
         List<Attachment> attachments = transcriptText.isBlank() ? List.of()
                 : List.of(new Attachment("transcript.txt", "text/plain", transcriptText.getBytes(StandardCharsets.UTF_8)));
-        return new Email(t.destinationEmail(), subject, body, attachments);
+        Recipients recipients = recipients(t);
+        return new Email(recipients.to(), recipients.cc(), subject(in.outcome(), in.city(), t.stay()), body, attachments);
+    }
+
+    /**
+     * The competition subject is used only for a confirmed booking: "Reservation Confirmed" on an
+     * enquiry would claim a booking that does not exist. Pending the user's decision on that wording,
+     * this is the one place to change it.
+     */
+    String subject(TaskOutcome outcome, String city, StayDetails stay) {
+        if (outcome == TaskOutcome.BOOKING_CONFIRMED) {
+            return "Team # %d - Hotel Reservation Confirmed!".formatted(teamNumber);
+        }
+        return "Hotel negotiation result — %s, ON — %s to %s".formatted(city, stay.checkIn(), stay.checkOut());
+    }
+
+    /**
+     * The address from the request is the recipient; {@code app.report.recipient}, when set, gets a
+     * copy (once, if it is the same address). Pending the user's confirmation of CC versus override,
+     * this is the one place to change it.
+     */
+    Recipients recipients(BookingTask task) {
+        boolean copy = !reportRecipient.isEmpty() && !reportRecipient.equalsIgnoreCase(task.destinationEmail());
+        return new Recipients(task.destinationEmail(), copy ? List.of(reportRecipient) : List.of());
+    }
+
+    /** The stay dates; "Booked on" is added only when a booking exists. */
+    private static String reservationDate(StayDetails stay, Reservation confirmed) {
+        String dates = "%s to %s (%d night%s)".formatted(stay.checkIn(), stay.checkOut(), stay.nights(),
+                stay.nights() == 1 ? "" : "s");
+        if (confirmed == null) {
+            return dates;
+        }
+        LocalDate bookedOn = confirmed.updatedAt().atZone(Municipality.DEFAULT_TIME_ZONE).toLocalDate();
+        return dates + "; Booked on: " + bookedOn;
+    }
+
+    private static String price(HotelOffer offer, Reservation confirmed) {
+        if (confirmed != null && confirmed.total() != null) {
+            return confirmed.total() + " all-in (booked)";
+        }
+        if (offer == null) {
+            return UNKNOWN;
+        }
+        return offer.negotiated().comparableTotal()
+                .map(total -> total + " all-in (HST, MAT and mandatory fees included; quoted, not booked)")
+                .orElseGet(() -> offer.negotiated().allInTotal() == null ? UNKNOWN
+                        : UNKNOWN + " (the hotel stated " + offer.negotiated().allInTotal() + "; taxes unconfirmed)");
     }
 
     private static String nextStep(BookingTask task, TaskOutcome outcome) {
