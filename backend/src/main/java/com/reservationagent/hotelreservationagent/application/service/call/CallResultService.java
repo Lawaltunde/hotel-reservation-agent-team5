@@ -94,8 +94,13 @@ public class CallResultService {
                 ? EvidenceStatus.WRITTEN_CONFIRMATION_PROMISED
                 : e.enquiryId() != null ? EvidenceStatus.REFERENCE_ID_GIVEN : EvidenceStatus.VERBAL_ONLY;
         return new HotelOffer(UUID.randomUUID(), task.id(), call.hotelId(), call.id(),
-                Boolean.TRUE.equals(e.availabilityConfirmed()), e.checkIn(), e.checkOut(), e.roomType(),
-                e.guestCount() == null ? 0 : e.guestCount(), money(e.initialQuotedTotal()), breakdown,
+                Boolean.TRUE.equals(e.availabilityConfirmed()),
+                // The agent asked about the task's stay; a hotel that answers without restating the
+                // dates or occupancy ("yes, tonight we have...") is answering about that stay.
+                e.checkIn() == null ? task.stay().checkIn() : e.checkIn(),
+                e.checkOut() == null ? task.stay().checkOut() : e.checkOut(),
+                e.roomType(),
+                e.guestCount() == null ? task.stay().guests() : e.guestCount(), money(e.initialQuotedTotal()), breakdown,
                 e.cancellationTerms(), e.depositTerms(), e.enquiryId(),
                 QuoteValidity.stated(e.quoteValidityText(), e.quoteValidityHours(), callEndedAt),
                 Boolean.TRUE.equals(e.roomHeld()), evidence, clock.instant());
