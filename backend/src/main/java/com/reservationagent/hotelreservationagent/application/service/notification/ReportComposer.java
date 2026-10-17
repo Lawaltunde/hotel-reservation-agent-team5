@@ -128,6 +128,26 @@ public class ReportComposer {
         return new Email(recipients.to(), recipients.cc(), subject(in.outcome(), in.city(), t.stay()), body, attachments);
     }
 
+    /** A minimal report that relies on as little as possible; used when {@link #compose} fails. */
+    public Email fallback(ReportInput in) {
+        BookingTask t = in.task();
+        StringBuilder body = new StringBuilder("Hello,\n\nHere is the result of your hotel-rate enquiry.\n\n");
+        body.append("Status: ").append(in.outcome()).append('\n');
+        body.append("Stay: ").append(t.stay().checkIn()).append(" to ").append(t.stay().checkOut()).append('\n');
+        if (in.hotel() != null) {
+            body.append("Hotel Name: ").append(in.hotel().name()).append('\n');
+            body.append("Hotel Address: ").append(orUnknown(in.hotel().address())).append('\n');
+            body.append("Hotel Phone: ").append(in.hotel().bestPhone() == null ? UNKNOWN : in.hotel().bestPhone().e164()).append('\n');
+        }
+        if (in.bestOffer() != null) {
+            body.append("Price for the stay: ").append(in.bestOffer().negotiated().comparableTotal()
+                    .map(Money::toString).orElse(UNKNOWN)).append('\n');
+        }
+        body.append("\nSome report details could not be produced. No reservation was made.\n\nRegards,\nHotel Deal Agent\n");
+        Recipients recipients = recipients(t);
+        return new Email(recipients.to(), recipients.cc(), subject(in.outcome(), in.city(), t.stay()), body.toString(), List.of());
+    }
+
     /**
      * The competition subject is used only for a confirmed booking: "Reservation Confirmed" on an
      * enquiry would claim a booking that does not exist. Pending the user's decision on that wording,
