@@ -41,9 +41,10 @@ public record HotelOffer(
     }
 
     public Money savings() {
+        // A lambda, not initialQuotedTotal::minus: a method reference dereferences a null receiver immediately.
         return negotiated.comparableTotal()
                 .filter(total -> initialQuotedTotal != null)
-                .map(initialQuotedTotal::minus)
+                .map(total -> initialQuotedTotal.minus(total))
                 .orElse(null);
     }
 }

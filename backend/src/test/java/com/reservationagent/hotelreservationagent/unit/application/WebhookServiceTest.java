@@ -120,7 +120,7 @@ class WebhookServiceTest {
         when(resendVerifier.supports(WebhookProvider.ELEVENLABS)).thenReturn(true);
         when(resendVerifier.verify(HEADERS, BODY)).thenReturn(true);
         WebhookPayloadParser.CallCompleted completed =
-                new WebhookPayloadParser.CallCompleted("conv-1", List.of(), true, null, NOW);
+                new WebhookPayloadParser.CallCompleted("conv-1", List.of(), true, null, NOW, 0);
         when(parser.parse(WebhookProvider.ELEVENLABS, BODY)).thenReturn(new ParsedEvent("post_call_transcription:conv-1",
                 "post_call_transcription", Optional.of(completed), Optional.empty()));
         when(events.insertIfAbsent(any())).thenReturn(true);

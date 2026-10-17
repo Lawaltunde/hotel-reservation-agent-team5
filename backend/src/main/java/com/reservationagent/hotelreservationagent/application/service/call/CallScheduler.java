@@ -9,6 +9,8 @@ import com.reservationagent.hotelreservationagent.domain.call.PhoneCall;
 import com.reservationagent.hotelreservationagent.domain.candidate.HotelCandidate;
 import com.reservationagent.hotelreservationagent.domain.hotel.Hotel;
 import com.reservationagent.hotelreservationagent.domain.task.BookingTask;
+import com.reservationagent.hotelreservationagent.domain.task.TaskIntake;
+import com.reservationagent.hotelreservationagent.domain.task.TaskIntake.StatedField;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,8 @@ import java.util.stream.Collectors;
 public class CallScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(CallScheduler.class);
+    /** What the voice agent sees for a value the guest did not give; it must not invent one. */
+    static final String NOT_SPECIFIED = "not specified";
 
     private final VoiceCallProvider voice;
     private final PhoneCallRepository calls;
@@ -94,13 +98,39 @@ public class CallScheduler {
         vars.put("check_in", task.stay().checkIn().toString());
         vars.put("check_out", task.stay().checkOut().toString());
         vars.put("nights", String.valueOf(task.stay().nights()));
-        vars.put("rooms", String.valueOf(task.stay().rooms()));
-        vars.put("adults", String.valueOf(task.stay().adults()));
-        vars.put("children", String.valueOf(task.stay().children()));
+        TaskIntake intake = task.intake();
+        vars.put("rooms", stated(intake, StatedField.ROOMS, task.stay().rooms()));
+        vars.put("adults", stated(intake, StatedField.ADULTS, task.stay().adults()));
+        vars.put("children", stated(intake, StatedField.CHILDREN, task.stay().children()));
+        vars.put("stay_request", stayRequest(task));
         vars.put("max_negotiation_rounds", String.valueOf(policy.maxNegotiationRounds()));
         vars.put("authorization_mode", task.authorizationMode().name());
         vars.put("required_amenities", String.join(", ", task.requiredAmenities()));
         return vars;
+    }
+
+    private static String stated(TaskIntake intake, StatedField field, int value) {
+        return intake.isStated(field) ? String.valueOf(value) : NOT_SPECIFIED;
+    }
+
+    /**
+     * One sentence the agent can say, using only what the guest stated. Unstated counts are left out
+     * so the hotel quotes its cheapest available room at standard occupancy.
+     */
+    static String stayRequest(BookingTask task) {
+        TaskIntake in = task.intake();
+        StringBuilder s = new StringBuilder();
+        s.append(in.isStated(StatedField.ROOMS) && task.stay().rooms() > 1 ? task.stay().rooms() + " rooms" : "a room");
+        if (in.isStated(StatedField.ADULTS)) {
+            s.append(" for ").append(task.stay().adults()).append(task.stay().adults() == 1 ? " adult" : " adults");
+            if (in.isStated(StatedField.CHILDREN) && task.stay().children() > 0) {
+                s.append(" and ").append(task.stay().children()).append(task.stay().children() == 1 ? " child" : " children");
+            }
+        }
+        long nights = task.stay().nights();
+        s.append(", checking in ").append(task.stay().checkIn()).append(" and checking out ")
+                .append(task.stay().checkOut()).append(" (").append(nights).append(nights == 1 ? " night)" : " nights)");
+        return s.toString();
     }
 
     private static PhoneCall withStatus(PhoneCall c, CallStatus status, String providerId, String conversationId, String failure) {

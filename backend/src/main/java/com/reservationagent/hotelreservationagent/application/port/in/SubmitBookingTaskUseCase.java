@@ -1,6 +1,7 @@
 package com.reservationagent.hotelreservationagent.application.port.in;
 
 import com.reservationagent.hotelreservationagent.domain.task.AuthorizationMode;
+import com.reservationagent.hotelreservationagent.domain.task.TaskIntake;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -26,7 +27,8 @@ public interface SubmitBookingTaskUseCase {
             Set<String> requiredAmenities,
             AuthorizationMode authorizationMode,
             BigDecimal maximumTotalCad,
-            boolean allowCompetingQuoteDisclosure
+            boolean allowCompetingQuoteDisclosure,
+            TaskIntake intake
     ) {
     }
 }

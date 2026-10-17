@@ -50,7 +50,7 @@ class ResendEmailProviderTest {
         resend.stubFor(post("/emails").willReturn(okJson("{\"id\":\"49a3999c-0ce1-4ea6-ab68-afcd6dc2e794\"}")));
         byte[] transcript = "Agent: Hello\nHotel: Hi — bonjour".getBytes(StandardCharsets.UTF_8);
 
-        String id = send(new Email("traveller@example.com", "Hotel negotiation result — Ottawa, ON", "Hello,\n\nResult…",
+        String id = send(new Email("traveller@example.com", List.of(), "Hotel negotiation result — Ottawa, ON", "Hello,\n\nResult…",
                 List.of(new Attachment("transcript.txt", "text/plain", transcript))));
 
         assertThat(id).isEqualTo("49a3999c-0ce1-4ea6-ab68-afcd6dc2e794");
@@ -67,7 +67,7 @@ class ResendEmailProviderTest {
     void noAttachmentsSendsAnEmptyList() throws Exception {
         resend.stubFor(post("/emails").willReturn(okJson("{\"id\":\"em_1\"}")));
 
-        assertThat(send(new Email("a@example.com", "s", "t", List.of()))).isEqualTo("em_1");
+        assertThat(send(new Email("a@example.com", List.of(), "s", "t", List.of()))).isEqualTo("em_1");
         resend.verify(postRequestedFor(urlEqualTo("/emails")).withRequestBody(equalToJson(
                 "{\"from\":\"Hotel Deal Agent <agent@example.com>\",\"to\":[\"a@example.com\"],\"subject\":\"s\",\"text\":\"t\",\"attachments\":[]}")));
     }
@@ -79,7 +79,7 @@ class ResendEmailProviderTest {
                 .withBody("{\"statusCode\":422,\"name\":\"validation_error\",\"message\":\"Invalid `from` field.\"}")));
 
         assertThatExceptionOfType(ExecutionException.class)
-                .isThrownBy(() -> send(new Email("a@example.com", "s", "t", List.of())));
+                .isThrownBy(() -> send(new Email("a@example.com", List.of(), "s", "t", List.of())));
     }
 
     @Test
@@ -87,6 +87,6 @@ class ResendEmailProviderTest {
         resend.stubFor(post("/emails").willReturn(okJson("{\"id\":\"late\"}").withFixedDelay(2_000)));
 
         assertThatExceptionOfType(ExecutionException.class)
-                .isThrownBy(() -> send(new Email("a@example.com", "s", "t", List.of())));
+                .isThrownBy(() -> send(new Email("a@example.com", List.of(), "s", "t", List.of())));
     }
 }

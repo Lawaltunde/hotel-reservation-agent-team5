@@ -2,7 +2,9 @@ package com.reservationagent.hotelreservationagent.application.service.discovery
 
 import com.reservationagent.hotelreservationagent.application.policy.AgentPolicy;
 import com.reservationagent.hotelreservationagent.application.port.out.HotelCandidateRepository;
+import com.reservationagent.hotelreservationagent.application.port.out.HotelDiscoverySource;
 import com.reservationagent.hotelreservationagent.application.port.out.HotelEnrichmentProvider;
+import com.reservationagent.hotelreservationagent.application.port.out.HotelIndexWriter;
 import com.reservationagent.hotelreservationagent.application.port.out.HotelIndex;
 import com.reservationagent.hotelreservationagent.application.port.out.HotelIndex.NearbyHotel;
 import com.reservationagent.hotelreservationagent.application.port.out.HotelPriceProvider;
@@ -37,6 +39,7 @@ import java.util.stream.Collectors;
 public class CandidateDiscoveryService {
 
     private static final Logger log = LoggerFactory.getLogger(CandidateDiscoveryService.class);
+    private static final long DISCOVERY_TIMEOUT_SECONDS = 8;
 
     private final HotelIndex hotelIndex;
     private final HotelEnrichmentProvider enrichment;
@@ -45,10 +48,15 @@ public class CandidateDiscoveryService {
     private final CandidateRanker ranker;
     private final HotelCandidateRepository candidates;
     private final AgentPolicy policy;
+    private final HotelDiscoverySource discovery;
+    private final HotelIndexWriter indexWriter;
 
     public CandidateDiscoveryService(HotelIndex hotelIndex, HotelEnrichmentProvider enrichment, HotelPriceProvider prices,
                                      QuoteHistoryRepository quoteHistory, CandidateRanker ranker,
-                                     HotelCandidateRepository candidates, AgentPolicy policy) {
+                                     HotelCandidateRepository candidates, AgentPolicy policy,
+                                     HotelDiscoverySource discovery, HotelIndexWriter indexWriter) {
+        this.discovery = discovery;
+        this.indexWriter = indexWriter;
         this.hotelIndex = hotelIndex;
         this.enrichment = enrichment;
         this.prices = prices;
@@ -60,6 +68,7 @@ public class CandidateDiscoveryService {
 
     /** @return eligible candidates in call order (also persisted, with exclusions) */
     public List<HotelCandidate> discover(BookingTask task, Municipality municipality) {
+        refreshIndex(task, municipality);
         List<NearbyHotel> nearby = hotelIndex.findNear(
                 municipality, policy.searchRadiusKm(), policy.allowedPropertyTypes(), policy.candidateLimit());
 
@@ -104,6 +113,20 @@ public class CandidateDiscoveryService {
         candidates.saveAll(all);
         log.info("task={} screened={} eligible={}", task.id(), nearby.size(), result.size());
         return result;
+    }
+
+    /** Adds hotels found live (Google Places) to the index; a failure or timeout just means fewer candidates. */
+    private void refreshIndex(BookingTask task, Municipality municipality) {
+        try {
+            List<HotelDiscoverySource.DiscoveredHotel> found = discovery.search(municipality, policy.searchRadiusKm())
+                    .completeOnTimeout(List.of(), DISCOVERY_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                    .join();
+            int written = found.isEmpty() ? 0 : indexWriter.upsert(found, municipality.id());
+            log.info("task={} live hotel search in {}: found={} written={}", task.id(), municipality.name(),
+                    found.size(), written);
+        } catch (RuntimeException e) {
+            log.warn("task={} live hotel search failed: {}", task.id(), e.getMessage());
+        }
     }
 
     private List<RankingInput> enrichShortlist(BookingTask task, List<RankingInput> shortlist) {
