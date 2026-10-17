@@ -14,7 +14,7 @@ interface OfferCardProps {
  * is a hotel reference, not a booking, and unknown amounts read "Unknown", never 0.
  *
  * The headline is the ranking price: the all-in total, or a clearly marked estimate ("≈ … incl.
- * HST") when the hotel only gave a pre-tax rate. When neither exists the card says so instead of
+ * sales tax") when the hotel only gave a pre-tax rate. When neither exists the card says so instead of
  * promoting a partial figure.
  */
 export function OfferCard({ offer, best = false, booked = false }: OfferCardProps) {
@@ -60,7 +60,7 @@ export function OfferCard({ offer, best = false, booked = false }: OfferCardProp
           ) : total !== null ? (
             <>
               <p className="font-mono text-2xl font-semibold tabular-nums text-ink">{formatMoney(total, currency)}</p>
-              <p className="text-xs text-muted">Room, HST, municipal tax and mandatory fees</p>
+              <p className="text-xs text-muted">Room, sales taxes, levies and fees</p>
             </>
           ) : (
             <>
@@ -92,9 +92,9 @@ export function OfferCard({ offer, best = false, booked = false }: OfferCardProp
         {offer.allInTotal !== undefined && <Row term="All-in total as stated by the hotel" value={formatMoney(offer.allInTotal, currency)} />}
         <Row term="Taxes in stated total" value={taxInclusionLabel(offer.taxInclusion)} />
         {offer.roomSubtotal !== undefined && <Row term="Room, before taxes and fees" value={formatMoney(offer.roomSubtotal, currency)} />}
-        <Row term={offer.salesTaxLabel?.trim() || "HST"} value={formatMoney(offer.salesTax ?? offer.hst, currency)} />
+        <Row term={offer.salesTaxLabel?.trim() || "Sales tax"} value={formatMoney(offer.salesTax ?? offer.hst, currency)} />
         <Row
-          term={offer.levyLabel?.trim() || "Municipal accommodation tax"}
+          term={offer.levyLabel?.trim() || "Accommodation levy"}
           value={formatMoney(offer.accommodationLevy ?? offer.municipalAccommodationTax, currency)}
         />
         <Row term="Mandatory fees" value={formatMoney(offer.mandatoryFees, currency)} />

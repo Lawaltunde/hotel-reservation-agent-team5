@@ -44,14 +44,14 @@ const ORDER: AskedField[] = ["city", "checkIn", "email"];
 
 /** Noun phrase used when several things are missing at once. */
 const NEEDS: Record<AskedField, string> = {
-  city: "the Ontario city you'd like to stay in",
+  city: "the city you'd like to stay in",
   checkIn: "your check-in date",
   email: "the email address for the results",
 };
 
 /** Question used when exactly one thing is missing. */
 const QUESTIONS: Record<AskedField, string> = {
-  city: "Which Ontario city would you like to stay in?",
+  city: "Which city would you like to stay in?",
   checkIn: "Which day would you like to check in?",
   email: "What email address should I send the results to?",
 };
@@ -121,12 +121,12 @@ export function followUpForErrors(errors: readonly FieldError[], latestPrompt: s
   return { text: parts.join(" ") };
 }
 
-/** The reply to a 422: the city is outside Ontario, or its name matches several Ontario places. */
+/** The reply to a 422: the place is outside Canada, or its name matches several Canadian places. */
 export function followUpForCity(detail: string | undefined, suggestions: readonly string[]): FollowUp {
   if (suggestions.length > 0) {
-    return { text: `Which Ontario city did you mean?${detail ? ` ${sentence(detail)}` : ""}`, choices: suggestions.map(cityChoice) };
+    return { text: `Which Canadian city did you mean?${detail ? ` ${sentence(detail)}` : ""}`, choices: suggestions.map(cityChoice) };
   }
   return {
-    text: `I can only search hotels in Ontario.${detail ? ` ${sentence(detail)}` : ""} Which Ontario city should I search?`,
+    text: `I can only search hotels in Canada.${detail ? ` ${sentence(detail)}` : ""} Which Canadian city should I search?`,
   };
 }
