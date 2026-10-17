@@ -8,4 +8,6 @@ import java.util.UUID;
 interface EmailDeliveryJpaRepository extends JpaRepository<EmailDeliveryEntity, UUID> {
 
     Optional<EmailDeliveryEntity> findByProviderMessageId(String providerMessageId);
+
+    Optional<EmailDeliveryEntity> findFirstByTaskIdOrderBySentAtDesc(UUID taskId);
 }

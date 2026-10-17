@@ -73,30 +73,44 @@ class TaskControllerTest {
     @MockitoBean
     private SubmitBookingTaskUseCase submit;
     @MockitoBean
+    private com.reservationagent.hotelreservationagent.application.port.in.SubmitTaskPromptUseCase submitPrompt;
+    @MockitoBean
     private GetBookingTaskUseCase getTask;
     @MockitoBean
     private SubscribeTaskProgressUseCase progress;
 
     private static TaskSnapshot snapshot(BookingTask task) {
-        return new TaskSnapshot(task, "Ottawa", 0, 0, List.of(), null, null, Map.of());
+        return new TaskSnapshot(task, "Ottawa", 0, 0, List.of(), null, null, Map.of(), null, null);
     }
 
     private static BookingTask withStatus(BookingTask t, TaskStatus status, TaskOutcome outcome) {
         return new BookingTask(t.id(), t.requestId(), t.municipalityId(), t.stay(), t.destinationEmail(),
                 t.authorizationMode(), t.maximumTotal(), t.requiredAmenities(), t.allowCompetingQuoteDisclosure(),
-                t.deadline(), status, outcome, t.createdAt(), t.updatedAt());
+                t.intake(), t.deadline(), status, outcome, t.createdAt(), t.updatedAt());
     }
 
     /*
      * The 400 `errors` entries are plain strings today and become {field, message} objects in the
      * next backend change; these two helpers are the only places that know the shape.
      */
+    /** Each 400 entry is {field, message}; compared here as "field: message" (just "message" if field is null). */
+    private static List<String> errorStrings(org.springframework.test.web.servlet.MvcResult result) throws Exception {
+        String body = result.getResponse().getContentAsString();
+        List<String> fields = com.jayway.jsonpath.JsonPath.read(body, "$.errors[*].field");
+        List<String> messages = com.jayway.jsonpath.JsonPath.read(body, "$.errors[*].message");
+        List<String> out = new java.util.ArrayList<>();
+        for (int i = 0; i < messages.size(); i++) {
+            out.add(fields.get(i) == null ? messages.get(i) : fields.get(i) + ": " + messages.get(i));
+        }
+        return out;
+    }
+
     private static ResultMatcher errors(String... expected) {
-        return jsonPath("$.errors").value(org.hamcrest.Matchers.contains(expected));
+        return result -> org.assertj.core.api.Assertions.assertThat(errorStrings(result)).containsExactly(expected);
     }
 
     private static ResultMatcher firstError(String expected) {
-        return jsonPath("$.errors[0]").value(expected);
+        return result -> org.assertj.core.api.Assertions.assertThat(errorStrings(result)).first().isEqualTo(expected);
     }
 
     // ---------- POST /api/tasks ----------
@@ -239,15 +253,16 @@ class TaskControllerTest {
     @Test
     void businessRuleViolationsBecome400WithErrors() throws Exception {
         when(submit.submit(any())).thenThrow(new RequestValidationException(
-                List.of("checkIn is in the past", "deadline must be in the future")));
+                List.of(new RequestValidationException.FieldError("checkIn", "Check-in date is in the past"),
+                        new RequestValidationException.FieldError("deadline", "Deadline must be in the future"))));
 
         mvc.perform(post("/api/tasks").contentType(MediaType.APPLICATION_JSON).content(VALID))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.title").value("Invalid request"))
-                .andExpect(jsonPath("$.detail").value("checkIn is in the past; deadline must be in the future"))
+                .andExpect(jsonPath("$.detail").value("checkIn: Check-in date is in the past; deadline: Deadline must be in the future"))
                 .andExpect(errors(
-                        "checkIn is in the past", "deadline must be in the future"));
+                        "checkIn: Check-in date is in the past", "deadline: Deadline must be in the future"));
     }
 
     @Test
@@ -338,7 +353,7 @@ class TaskControllerTest {
         Hotel hotel = hotel("Rideau Inn", PropertyType.HOTEL, 3, PriceTier.MIDSCALE, 0.9, "+16135550100");
         HotelOffer best = offer(task, hotel.id(), breakdown("300", "39", "12", "15"), NOW);
         when(getTask.get(task.id())).thenReturn(Optional.of(new TaskSnapshot(task, "Ottawa", 5, 2, List.of(best), best,
-                null, Map.of(hotel.id(), hotel))));
+                null, Map.of(hotel.id(), hotel), null, null)));
 
         mvc.perform(get("/api/tasks/{id}", task.id()))
                 .andExpect(status().isOk())

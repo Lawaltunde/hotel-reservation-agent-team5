@@ -3,7 +3,6 @@ package com.reservationagent.hotelreservationagent.unit.domain;
 import com.reservationagent.hotelreservationagent.domain.offer.HotelOffer;
 import com.reservationagent.hotelreservationagent.domain.shared.Money;
 import com.reservationagent.hotelreservationagent.domain.task.BookingTask;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
@@ -47,8 +46,6 @@ class HotelOfferTest {
     }
 
     @Test
-    @Disabled("BUG: savings() throws NullPointerException when initialQuotedTotal is null: "
-            + "initialQuotedTotal::minus dereferences the receiver before the filter runs")
     void unknownInitialQuoteMeansUnknownSavings() {
         HotelOffer o = withInitialQuote(offer(task, UUID.randomUUID(), breakdown("300.00", "39.00", "12.00", "15.00"), NOW),
                 null);

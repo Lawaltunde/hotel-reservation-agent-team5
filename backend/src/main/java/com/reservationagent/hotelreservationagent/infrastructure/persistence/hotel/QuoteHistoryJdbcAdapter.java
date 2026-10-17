@@ -5,6 +5,7 @@ import com.reservationagent.hotelreservationagent.domain.shared.Money;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -32,7 +33,10 @@ class QuoteHistoryJdbcAdapter implements QuoteHistoryRepository {
             return result;
         }
         jdbc.sql(MEDIAN).param("ids", hotelIds).query(rs -> {
-            result.put(rs.getObject("hotel_id", UUID.class), Money.cad(rs.getBigDecimal("median")));
+            BigDecimal median = rs.getBigDecimal("median");
+            if (median != null) {
+                result.put(rs.getObject("hotel_id", UUID.class), Money.cad(median));
+            }
         });
         return result;
     }
