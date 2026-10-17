@@ -552,7 +552,9 @@ class CompetitionDryRunIT {
                 .isEqualTo(AUDIO);
         assertThat(attached).allMatch(name -> name.matches("call-\\d+-[a-z0-9-]+(\\.mp3|-transcript\\.txt)"));
         List<String> reported = new ArrayList<>();
-        report.path("attachments").forEach(a -> reported.add(a.asString()));
+        report.path("attachments").forEach(a -> reported.add(a.path("fileName").asString()));
+        assertThat(report.path("attachments").get(0).path("contentType").asString()).isEqualTo("audio/mpeg");
+        assertThat(report.path("attachments").get(0).path("sizeBytes").asLong()).isEqualTo(AUDIO.length);
         assertThat(reported).as("report lists the attachment names").containsExactlyElementsOf(attached);
     }
 

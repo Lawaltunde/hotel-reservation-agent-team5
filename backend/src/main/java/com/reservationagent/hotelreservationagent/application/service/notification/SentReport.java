@@ -20,8 +20,12 @@ public record SentReport(
         Tokens tokens,
         List<TranscriptEntry> transcripts,
         Instant composedAt,
-        List<String> attachments
+        List<AttachmentInfo> attachments
 ) {
+
+    /** An attached file as listed in the stored report (the bytes are not stored). */
+    public record AttachmentInfo(String fileName, String contentType, long sizeBytes) {
+    }
 
     public SentReport {
         attachments = attachments == null ? List.of() : List.copyOf(attachments);

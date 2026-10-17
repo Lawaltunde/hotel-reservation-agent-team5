@@ -281,7 +281,8 @@ public class ReportComposer {
                 chosen.map(CallEvidence::conversationUrl).orElse(null));
         SentReport report = new SentReport(subject, from, recipients.to(), recipients.cc(), body, null, fields,
                 new SentReport.Tokens(usage.promptTokens(), usage.completionTokens(), usage.callSeconds()),
-                transcripts, clock.instant(), attachments.files().stream().map(Attachment::filename).toList());
+                transcripts, clock.instant(), attachments.files().stream()
+                        .map(a -> new SentReport.AttachmentInfo(a.filename(), a.contentType(), a.content().length)).toList());
         return new Composed(email, report);
     }
 
