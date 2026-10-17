@@ -67,12 +67,12 @@ public final class Fixtures {
     /** All mandatory components known, taxes stated separately: comparable total = sum of the parts. */
     public static PriceBreakdown breakdown(String roomSubtotal, String hst, String mat, String mandatoryFees) {
         return new PriceBreakdown(Money.cad(roomSubtotal), Money.cad(hst), Money.cad(mat), Money.cad(mandatoryFees),
-                null, TaxInclusion.EXCLUDED);
+                null, null, TaxInclusion.EXCLUDED);
     }
 
     /** Nothing known: no comparable total. */
     public static PriceBreakdown unknownBreakdown() {
-        return new PriceBreakdown(null, null, null, null, null, TaxInclusion.UNKNOWN);
+        return new PriceBreakdown(null, null, null, null, null, null, TaxInclusion.UNKNOWN);
     }
 
     /** An available offer that exactly matches {@link #task()}'s stay, with no expiry. */

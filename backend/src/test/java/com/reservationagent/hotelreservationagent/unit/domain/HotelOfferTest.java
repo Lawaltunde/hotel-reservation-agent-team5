@@ -23,7 +23,7 @@ class HotelOfferTest {
     private static HotelOffer withInitialQuote(HotelOffer o, Money initial) {
         return new HotelOffer(o.id(), o.taskId(), o.hotelId(), o.callId(), o.availabilityConfirmed(), o.checkIn(),
                 o.checkOut(), o.roomType(), o.guestCount(), initial, o.negotiated(), o.cancellationTerms(),
-                o.depositTerms(), o.enquiryId(), o.quoteValidUntil(), o.holdsRoom(), o.evidenceStatus(), o.receivedAt());
+                o.depositTerms(), o.enquiryId(), o.quoteValidity(), o.holdsRoom(), o.evidenceStatus(), o.receivedAt());
     }
 
     @Test

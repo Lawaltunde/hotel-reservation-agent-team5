@@ -71,7 +71,7 @@ describe("SearchForm", () => {
     expect(screen.getByRole("radio", { name: /Enquiry only/ })).toBeChecked();
   });
 
-  it("explains a 422 for a city outside Ontario and offers suggestions", async () => {
+  it("asks which city was meant for an ambiguous 422 and offers suggestions", async () => {
     const user = userEvent.setup();
     createTaskMock.mockRejectedValue(
       new ApiError("'Springfield' matches several Ontario municipalities", 422, {
@@ -87,7 +87,7 @@ describe("SearchForm", () => {
     await user.click(screen.getByRole("button", { name: "Find my hotel" }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("We only search Ontario.");
+    expect(alert).toHaveTextContent("Which Ontario city did you mean?");
     expect(alert).toHaveTextContent("'Springfield' matches several Ontario municipalities");
     expect(push).not.toHaveBeenCalled();
 
@@ -112,6 +112,7 @@ describe("SearchForm", () => {
     await user.click(screen.getByRole("button", { name: "Find my hotel" }));
 
     const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("We only search Ontario.");
     expect(alert).toHaveTextContent("'Vancouver' is not a supported Ontario municipality");
     expect(within(alert).queryByRole("button")).not.toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "City in Ontario" })).toHaveAttribute("aria-invalid", "true");

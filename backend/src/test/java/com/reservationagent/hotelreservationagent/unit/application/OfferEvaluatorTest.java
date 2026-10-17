@@ -35,7 +35,7 @@ class OfferEvaluatorTest {
     private static HotelOffer with(HotelOffer o, boolean available, java.time.LocalDate in, java.time.LocalDate out, int guests) {
         return new HotelOffer(o.id(), o.taskId(), o.hotelId(), o.callId(), available, in, out, o.roomType(), guests,
                 o.initialQuotedTotal(), o.negotiated(), o.cancellationTerms(), o.depositTerms(), o.enquiryId(),
-                o.quoteValidUntil(), o.holdsRoom(), o.evidenceStatus(), o.receivedAt());
+                o.quoteValidity(), o.holdsRoom(), o.evidenceStatus(), o.receivedAt());
     }
 
     @Test
