@@ -78,7 +78,7 @@ public class CallResultService {
     private HotelOffer toOffer(BookingTask task, PhoneCall call, ExtractedOffer e) {
         PriceBreakdown breakdown = new PriceBreakdown(money(e.roomSubtotal()), money(e.hst()),
                 money(e.municipalAccommodationTax()), money(e.mandatoryFees()), money(e.optionalFees()),
-                taxInclusion(e.taxesIncludedInQuote()));
+                money(e.allInTotal()), taxInclusion(e.taxesIncludedInQuote()));
         EvidenceStatus evidence = Boolean.TRUE.equals(e.writtenConfirmationPromised())
                 ? EvidenceStatus.WRITTEN_CONFIRMATION_PROMISED
                 : e.enquiryId() != null ? EvidenceStatus.REFERENCE_ID_GIVEN : EvidenceStatus.VERBAL_ONLY;
