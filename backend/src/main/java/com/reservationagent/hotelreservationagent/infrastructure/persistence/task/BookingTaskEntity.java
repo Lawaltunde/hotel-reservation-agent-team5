@@ -39,6 +39,16 @@ class BookingTaskEntity {
     @Column(columnDefinition = "text[]")
     String[] requiredAmenities;
     boolean allowCompetingQuoteDisclosure;
+    String originalPrompt;
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(columnDefinition = "text[]")
+    String[] statedFields;
+    String emailSource;
+    String notes;
+    BigDecimal maximumPerNight;
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(columnDefinition = "text[]")
+    String[] assumptions;
     Instant deadline;
     @Enumerated(EnumType.STRING)
     TaskStatus status;

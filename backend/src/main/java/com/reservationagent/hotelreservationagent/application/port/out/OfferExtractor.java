@@ -12,7 +12,10 @@ import java.time.LocalDate;
  */
 public interface OfferExtractor {
 
-    ExtractedOffer extract(String transcript, StayDetails requestedStay);
+    Extraction extract(String transcript, StayDetails requestedStay);
+
+    record Extraction(ExtractedOffer offer, AiUsageRepository.TokenUsage usage) {
+    }
 
     record ExtractedOffer(
             CallOutcome callOutcome,

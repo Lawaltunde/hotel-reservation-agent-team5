@@ -30,6 +30,17 @@ public class OfferEvaluator {
                 && (offer.quoteValidUntil() == null || offer.quoteValidUntil().isAfter(clock.instant()));
     }
 
+    /**
+     * True when some offer has availability confirmed for the asked dates and any stated price, i.e.
+     * the report can name a confirmed-available option.
+     */
+    public boolean hasConfirmedPricedOffer(BookingTask task, List<HotelOffer> offers) {
+        return offers.stream().anyMatch(o -> o.availabilityConfirmed()
+                && task.stay().checkIn().equals(o.checkIn()) && task.stay().checkOut().equals(o.checkOut())
+                && (o.negotiated().comparableTotal().isPresent() || o.negotiated().allInTotal() != null
+                    || o.negotiated().roomSubtotal() != null));
+    }
+
     public boolean isWithinBudget(BookingTask task, HotelOffer offer) {
         Money max = task.maximumTotal();
         return max == null || offer.negotiated().comparableTotal().map(t -> t.compareTo(max) <= 0).orElse(false);

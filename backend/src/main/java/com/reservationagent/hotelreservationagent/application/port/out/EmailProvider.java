@@ -8,7 +8,12 @@ public interface EmailProvider {
 
     CompletableFuture<String> send(Email email);
 
-    record Email(String to, String subject, String textBody, List<Attachment> attachments) {
+    /** @param cc copies, possibly empty */
+    record Email(String to, List<String> cc, String subject, String textBody, List<Attachment> attachments) {
+
+        public Email {
+            cc = cc == null ? List.of() : List.copyOf(cc);
+        }
     }
 
     record Attachment(String filename, String contentType, byte[] content) {
