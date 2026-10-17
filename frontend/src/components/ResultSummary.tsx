@@ -1,4 +1,4 @@
-import { formatMoney, outcomeLabel, statusLabel, taxInclusionLabel } from "@/components/format";
+import { formatMoney, formatQuoteValidity, outcomeLabel, statusLabel } from "@/components/format";
 import type { Task } from "@/models/task";
 import { isTerminalStatus } from "@/models/task";
 
@@ -8,16 +8,68 @@ interface Summary {
   tone: Tone;
   title: string;
   body: string;
+  /** Concrete next steps, shown as a list. */
+  nextSteps?: string[];
 }
+
+/** What a user can change when no hotel fits. */
+const WIDEN_SEARCH = [
+  "Try different or more flexible dates.",
+  "Raise or remove the maximum budget.",
+  "Remove amenities you can do without.",
+  "Search a nearby Ontario city.",
+];
 
 /** True only for a hotel-confirmed booking. Quotes and enquiries never count. */
 export function isConfirmedBooking(task: Task): boolean {
   return task.outcome === "BOOKING_CONFIRMED";
 }
 
+/** "CAD 412.30 all-in at Hotel X", or a plain statement that the all-in total is unknown. */
+function bestQuotePhrase(task: Task): string | null {
+  const best = task.bestOffer;
+  if (!best) return null;
+  const hotel = best.hotelName ?? "an unnamed hotel";
+  return best.negotiatedTotal === null
+    ? `from ${hotel}, all-in total unknown`
+    : `${formatMoney(best.negotiatedTotal, best.currency || "CAD")} all-in at ${hotel}`;
+}
+
+/** Summary for a finished search that has no usable quote, keyed by outcome. */
+function noQuoteSummary(task: Task): Summary {
+  switch (task.outcome) {
+    case "NO_ELIGIBLE_HOTELS":
+      return {
+        tone: "warning",
+        title: "No eligible hotels found",
+        body: "No hotel in that city matched your dates, guests, budget and amenities, so no calls were made.",
+        nextSteps: WIDEN_SEARCH,
+      };
+    case "CALL_FAILED":
+      return {
+        tone: "warning",
+        title: "We couldn't get through to the hotels",
+        body: "The calls didn't connect or ended before a quote was given. Nothing was reserved. You can try again later.",
+      };
+    case "FOLLOW_UP_REQUIRED":
+      return {
+        tone: "info",
+        title: "A hotel needs to follow up",
+        body: "A hotel couldn't give a full quote on the call. Nothing was reserved. Details are in your email.",
+      };
+    default:
+      return {
+        tone: "info",
+        title: "Search finished without a usable quote",
+        body: "The agent didn't get a quote it could stand behind. Nothing was reserved. The details and transcripts have been emailed to you.",
+        nextSteps: WIDEN_SEARCH,
+      };
+  }
+}
+
 function summarize(task: Task): Summary {
   const best = task.bestOffer;
-  const price = best ? formatMoney(best.negotiatedTotal ?? best.initialQuotedTotal, best.currency || "CAD") : null;
+  const price = bestQuotePhrase(task);
 
   switch (task.status) {
     case "COMPLETED":
@@ -31,15 +83,11 @@ function summarize(task: Task): Summary {
       if (best) {
         return {
           tone: "success",
-          title: `Best quote: ${price} at ${best.hotelName ?? "an unnamed hotel"}`,
+          title: `Best quote: ${price}`,
           body: "This is a quote, not a booking. Nothing has been reserved. The result and the call transcript have been emailed to you.",
         };
       }
-      return {
-        tone: "info",
-        title: "Search finished without a usable quote",
-        body: "The agent didn't get a quote it could stand behind. The details and transcripts have been emailed to you.",
-      };
+      return noQuoteSummary(task);
     case "EMAIL_FAILED":
       return {
         tone: "warning",
@@ -61,9 +109,18 @@ function summarize(task: Task): Summary {
     case "OUT_OF_SCOPE_LOCATION":
       return { tone: "danger", title: "We only search Ontario", body: "That city isn't an Ontario municipality we support. Please start a new search." };
     case "NO_CANDIDATES":
-      return { tone: "warning", title: "No suitable hotels found", body: "No hotel in that city matched your dates, guests and budget." };
+      return {
+        tone: "warning",
+        title: "No suitable hotels found",
+        body: "No hotel in that city matched your dates, guests, budget and amenities, so no calls were made.",
+        nextSteps: WIDEN_SEARCH,
+      };
     case "NO_VALID_OFFER":
-      return { tone: "warning", title: "No usable quote yet", body: "Hotels were called, but none gave a quote that meets your requirements." };
+      return {
+        tone: "warning",
+        title: "No usable quote yet",
+        body: "Hotels were called, but none gave a complete all-in quote that meets your requirements. Nothing was reserved.",
+      };
     case "BOOKING_UNCERTAIN":
       return {
         tone: "danger",
@@ -90,17 +147,32 @@ const TONE_CLASSES: Record<Tone, string> = {
 
 /** Headline result of a task, worded so a quote never reads as a booking. */
 export function ResultSummary({ task }: { task: Task }) {
-  const { tone, title, body } = summarize(task);
+  const { tone, title, body, nextSteps } = summarize(task);
   const finished = isTerminalStatus(task.status);
   const best = task.bestOffer;
+  const validity = best ? formatQuoteValidity(best) : null;
 
   return (
-    <section aria-labelledby="result-heading" role={finished ? "status" : undefined} className={`rounded-xl border p-5 sm:p-6 ${TONE_CLASSES[tone]}`}>
+    <section aria-labelledby="result-heading" className={`rounded-xl border p-5 sm:p-6 ${TONE_CLASSES[tone]}`}>
+      {/* Always mounted so screen readers announce the result when it arrives; per-step progress is announced by the activity log. */}
+      <p role="status" className="sr-only">
+        {finished ? `Search finished. ${title}` : ""}
+      </p>
       <p className="text-xs font-medium tracking-wide uppercase opacity-75">{finished ? "Result" : "So far"}</p>
       <h2 id="result-heading" className="mt-1 text-xl font-semibold">
         {title}
       </h2>
       <p className="mt-2 text-sm">{body}</p>
+      {nextSteps && nextSteps.length > 0 && (
+        <div className="mt-3 text-sm">
+          <p className="font-medium">You could:</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+            {nextSteps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <dl className="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
         <Stat term="Hotels screened" value={task.candidatesScreened} />
@@ -115,9 +187,14 @@ export function ResultSummary({ task }: { task: Task }) {
       </dl>
 
       {best && !isConfirmedBooking(task) && (
-        <p className="mt-4 text-xs opacity-80">
-          {taxInclusionLabel(best.taxInclusion)}. Any hotel reference shown is an enquiry reference, not a confirmation number.
-        </p>
+        <div className="mt-4 space-y-1 text-xs opacity-80">
+          {validity && <p>{validity}.</p>}
+          {best.totalsDisagree && <p>The hotel&apos;s stated total and its itemized figures differ; see the quote below.</p>}
+          <p>
+            All-in means room, HST, municipal accommodation tax and mandatory fees, in Canadian dollars. Any hotel reference
+            shown is an enquiry reference, not a confirmation number.
+          </p>
+        </div>
       )}
     </section>
   );
