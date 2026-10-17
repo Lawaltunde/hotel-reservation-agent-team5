@@ -8,7 +8,7 @@ These tests drive the **packaged app**: one Spring Boot process that serves the 
 |---|---|---|
 | `tests/smoke.spec.ts` | Home page title, `GET /api/health` is UP, backend indicator says "online" | runs |
 | `tests/tasks-api.spec.ts` | API-level enquiry flow: an in-scope city (Ottawa) runs to `COMPLETED` / `NO_ELIGIBLE_HOTELS`; `requestId` idempotency; an out-of-scope city (`OUT_OF_SCOPE_CITY`, Seattle) → 422; past check-in → 400; SSE stream ends at `COMPLETED`; autocomplete | runs (needs a fresh database, see below) |
-| `tests/enquiry-flow.spec.ts` | UI enquiry flow on the search form | `test.fixme` until the chat UI (`POST /api/tasks/prompt`) lands |
+| `tests/enquiry-flow.spec.ts` | Chat intake: an Ottawa message runs to a finished search with the result email; "Start a new search"; a city outside Ontario is answered (422), not started; a missing email is asked for and the reply starts the search; a prompt-reader outage (503) offers "Try again" | runs (needs the mock prompt reader and a fresh database, see below) |
 
 ## Run locally
 
@@ -46,6 +46,16 @@ are set to `false` explicitly: `java -jar` from the repo root reads the root `.e
 environment variables win over it, so a live-run `.env` cannot make the e2e run place calls,
 query Google or send email. (Backend tests are guarded separately by
 `ProviderSafetyEnvironmentPostProcessor` in `backend/src/test`.)
+
+The chat specs need the app's prompt reader (OpenAI) answered by the mock in
+`support/mock-openai.mjs`, which picks a fixed reading by keyword ("ottawa", "vancouver",
+"explode" for an outage). Start it first and point the app at it:
+
+```bash
+node e2e/support/mock-openai.mjs &        # http://localhost:4010
+# add to the java -jar command above:
+SPRING_AI_OPENAI_BASE_URL=http://localhost:4010/v1 SPRING_AI_OPENAI_API_KEY=sk-e2e-mock
+```
 
 ### 2. Run the tests (in another terminal)
 
