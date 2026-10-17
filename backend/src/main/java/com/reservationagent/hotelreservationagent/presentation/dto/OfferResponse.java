@@ -12,8 +12,11 @@ import java.util.UUID;
 
 /**
  * One phone quote. Money values are CAD with two decimals; {@code null} means unknown, never zero.
- * {@code negotiatedTotal} is the all-in comparable total and is {@code null} when any mandatory
- * component is unknown. {@code enquiryId} is a hotel reference, never a booking confirmation.
+ * {@code negotiatedTotal} is the all-in comparable total: the sum of the room subtotal, HST, MAT and
+ * mandatory fees when all are known, otherwise the hotel's stated {@code allInTotal} if it includes
+ * taxes, otherwise {@code null}. {@code totalsDisagree} is true when that sum and the stated
+ * all-in total differ by more than CA$1. {@code enquiryId} is a hotel reference, never a booking
+ * confirmation.
  */
 public record OfferResponse(
         UUID offerId,
@@ -24,10 +27,14 @@ public record OfferResponse(
         BigDecimal initialQuotedTotal,
         BigDecimal negotiatedTotal,
         String currency,
+        BigDecimal roomSubtotal,
         BigDecimal hst,
         BigDecimal municipalAccommodationTax,
         BigDecimal mandatoryFees,
+        BigDecimal optionalFees,
+        BigDecimal allInTotal,
         TaxInclusion taxInclusion,
+        boolean totalsDisagree,
         String cancellationTerms,
         String depositTerms,
         String enquiryId,
@@ -46,10 +53,14 @@ public record OfferResponse(
                 amount(offer.initialQuotedTotal()),
                 p.comparableTotal().map(Money::amount).orElse(null),
                 Money.CURRENCY,
+                amount(p.roomSubtotal()),
                 amount(p.hst()),
                 amount(p.municipalAccommodationTax()),
                 amount(p.mandatoryFees()),
+                amount(p.optionalFees()),
+                amount(p.allInTotal()),
                 p.taxInclusion(),
+                p.totalsDisagree(),
                 offer.cancellationTerms(),
                 offer.depositTerms(),
                 offer.enquiryId(),

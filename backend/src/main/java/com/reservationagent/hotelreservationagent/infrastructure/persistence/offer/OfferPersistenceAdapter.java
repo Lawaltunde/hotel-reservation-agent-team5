@@ -38,6 +38,7 @@ class OfferPersistenceAdapter implements OfferRepository {
         e.municipalAccommodationTax = amount(p.municipalAccommodationTax());
         e.mandatoryFees = amount(p.mandatoryFees());
         e.optionalFees = amount(p.optionalFees());
+        e.allInTotal = amount(p.allInTotal());
         e.taxInclusion = p.taxInclusion();
         e.comparableTotal = p.comparableTotal().map(Money::amount).orElse(null);
         e.cancellationTerms = o.cancellationTerms();
@@ -58,7 +59,7 @@ class OfferPersistenceAdapter implements OfferRepository {
 
     private static HotelOffer toDomain(HotelOfferEntity e) {
         PriceBreakdown p = new PriceBreakdown(money(e.roomSubtotal), money(e.hst), money(e.municipalAccommodationTax),
-                money(e.mandatoryFees), money(e.optionalFees), e.taxInclusion);
+                money(e.mandatoryFees), money(e.optionalFees), money(e.allInTotal), e.taxInclusion);
         return new HotelOffer(e.id, e.taskId, e.hotelId, e.callId, e.availabilityConfirmed, e.checkIn, e.checkOut,
                 e.roomType, e.guestCount, money(e.initialQuotedTotal), p, e.cancellationTerms, e.depositTerms,
                 e.enquiryId, e.quoteValidUntil, e.holdsRoom, e.evidenceStatus, e.receivedAt);

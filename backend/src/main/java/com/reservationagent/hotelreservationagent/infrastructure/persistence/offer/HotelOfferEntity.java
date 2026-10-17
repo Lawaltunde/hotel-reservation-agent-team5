@@ -35,6 +35,7 @@ class HotelOfferEntity {
     BigDecimal municipalAccommodationTax;
     BigDecimal mandatoryFees;
     BigDecimal optionalFees;
+    BigDecimal allInTotal;
     @Enumerated(EnumType.STRING)
     TaxInclusion taxInclusion;
     BigDecimal comparableTotal;

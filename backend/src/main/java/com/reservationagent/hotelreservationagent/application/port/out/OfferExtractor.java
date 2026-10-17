@@ -28,6 +28,7 @@ public interface OfferExtractor {
             BigDecimal municipalAccommodationTax,
             BigDecimal mandatoryFees,
             BigDecimal optionalFees,
+            BigDecimal allInTotal,
             String taxesIncludedInQuote,
             BigDecimal initialQuotedTotal,
             String cancellationTerms,

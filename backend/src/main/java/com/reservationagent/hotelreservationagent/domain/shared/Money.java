@@ -38,6 +38,10 @@ public record Money(BigDecimal amount) implements Comparable<Money> {
         return new Money(amount.multiply(factor));
     }
 
+    public Money abs() {
+        return new Money(amount.abs());
+    }
+
     public boolean isNegative() {
         return amount.signum() < 0;
     }
