@@ -14,12 +14,14 @@ import java.util.List;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.transaction.TransactionException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -79,6 +81,32 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY,
                 "The recording could not be fetched right now. Please try again later.");
         problem.setTitle("Recording unavailable");
+        return problem;
+    }
+
+    /** Database unreachable or failing: a readable 503 instead of Spring's default 500 body. */
+    @ExceptionHandler({DataAccessException.class, TransactionException.class})
+    ProblemDetail storageUnavailable(RuntimeException e) {
+        log.error("Storage failure: {}", e.getMessage());
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE,
+                "The service is temporarily unavailable. Please try again in a minute.");
+        problem.setTitle("Service unavailable");
+        return problem;
+    }
+
+    /** The client went away (aborted download, broken pipe): nothing to send. */
+    @ExceptionHandler(java.io.IOException.class)
+    void clientGone(Exception e) {
+        log.debug("Client disconnected: {}", e.getMessage());
+    }
+
+    /** Anything unexpected: still a ProblemDetail with a human sentence, never a stack trace. */
+    @ExceptionHandler(Exception.class)
+    ProblemDetail unexpected(Exception e) {
+        log.error("Unhandled error", e);
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR,
+                "Something went wrong on our side. Please try again.");
+        problem.setTitle("Internal error");
         return problem;
     }
 
