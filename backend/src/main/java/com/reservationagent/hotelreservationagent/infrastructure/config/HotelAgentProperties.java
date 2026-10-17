@@ -23,7 +23,7 @@ public record HotelAgentProperties(
             @DefaultValue("60") int candidateLimit,
             @DefaultValue("6") int enrichmentLimit,
             @DefaultValue("2500ms") Duration enrichmentTimeout,
-            @DefaultValue("2") int maxParallelCalls,
+            @DefaultValue("3") int maxParallelCalls,
             @DefaultValue("8") int maxTotalCalls,
             @DefaultValue("2") int maxNegotiationRounds,
             @DefaultValue("240s") Duration maxCallDuration,
