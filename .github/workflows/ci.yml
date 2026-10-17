@@ -77,6 +77,12 @@ jobs:
         working-directory: frontend
         run: npm run typecheck
 
+      # Vitest: models, services and components in jsdom.
+      - name: Unit tests
+        if: hashFiles('frontend/package.json') != ''
+        working-directory: frontend
+        run: npm test
+
       - name: Build
         if: hashFiles('frontend/package.json') != ''
         working-directory: frontend
