@@ -123,9 +123,3 @@ export function taxInclusionLabel(value: TaxInclusion | null): string {
       return "Tax status unknown";
   }
 }
-
-export const AUTHORIZATION_MODE_LABELS: Record<string, string> = {
-  ENQUIRY_ONLY: "Enquiry only: get quotes, never book",
-  REQUIRE_APPROVAL: "Ask me before booking",
-  BOOK_IF_WITHIN_LIMITS: "Book automatically if within my budget",
-};

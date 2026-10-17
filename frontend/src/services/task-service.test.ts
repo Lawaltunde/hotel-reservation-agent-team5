@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ProgressEvent, Task, TaskStatus } from "@/models/task";
 import { ApiError } from "@/services/api-client";
-import { createTask, getTask, subscribeToTask, type SubscriptionMode } from "@/services/task-service";
+import { createTaskFromPrompt, getTask, subscribeToTask, type SubscriptionMode } from "@/services/task-service";
 import { makeTask } from "@/test/fixtures";
 
 const TASK_ID = "11111111-1111-4111-8111-111111111111";
@@ -79,30 +79,17 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("createTask / getTask", () => {
-  it("POSTs the request to /api/tasks", async () => {
+describe("createTaskFromPrompt / getTask", () => {
+  it("POSTs the prompt to /api/tasks/prompt with the idempotency key", async () => {
     fetchMock.mockResolvedValueOnce(Response.json({ taskId: TASK_ID, status: "VALIDATING" }, { status: 202 }));
 
-    const request = {
-      requestId: "r-1",
-      city: "Ottawa",
-      checkIn: "2026-11-20",
-      checkOut: "2026-11-22",
-      rooms: 1,
-      adults: 2,
-      children: 0,
-      destinationEmail: "a@example.com",
-      deadline: "2026-11-10T18:00:00.000Z",
-      requiredAmenities: [],
-      authorizationMode: "ENQUIRY_ONLY" as const,
-      maximumTotalCad: null,
-      allowCompetingQuoteDisclosure: false,
-    };
-    await expect(createTask(request)).resolves.toEqual({ taskId: TASK_ID, status: "VALIDATING" });
+    const request = { prompt: "Ottawa, Nov 20-22, 2 adults, a@example.com" };
+    await expect(createTaskFromPrompt(request, "key-1")).resolves.toEqual({ taskId: TASK_ID, status: "VALIDATING" });
 
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("/api/tasks");
+    expect(url).toBe("/api/tasks/prompt");
     expect(init?.method).toBe("POST");
+    expect(new Headers(init?.headers).get("Idempotency-Key")).toBe("key-1");
     expect(JSON.parse(String(init?.body))).toEqual(request);
   });
 

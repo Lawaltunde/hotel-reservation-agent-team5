@@ -83,7 +83,7 @@ function summarize(task: Task): Summary {
       if (best) {
         return {
           tone: "success",
-          title: `Best quote: ${price}`,
+          title: `Cheapest confirmed-available: ${price}`,
           body: "This is a quote, not a booking. Nothing has been reserved. The result and the call transcript have been emailed to you.",
         };
       }
@@ -133,16 +133,16 @@ function summarize(task: Task): Summary {
       return {
         tone: "info",
         title: statusLabel(task.status),
-        body: best ? `Best quote so far: ${price} (a quote, not a booking).` : "The agent is still working.",
+        body: best ? `Cheapest so far: ${price} (a quote, not a booking).` : "The agent is still working.",
       };
   }
 }
 
 const TONE_CLASSES: Record<Tone, string> = {
-  success: "border-emerald-200 bg-emerald-50 text-emerald-950",
-  info: "border-sky-200 bg-sky-50 text-sky-950",
-  warning: "border-amber-200 bg-amber-50 text-amber-950",
-  danger: "border-rose-200 bg-rose-50 text-rose-950",
+  success: "border-pine/30 bg-pine-soft text-ink",
+  info: "border-lake/30 bg-lake-soft text-ink",
+  warning: "border-lamp-line bg-lamp-soft text-ink",
+  danger: "border-alarm/30 bg-alarm-soft text-ink",
 };
 
 /** Headline result of a task, worded so a quote never reads as a booking. */
@@ -153,13 +153,9 @@ export function ResultSummary({ task }: { task: Task }) {
   const validity = best ? formatQuoteValidity(best) : null;
 
   return (
-    <section aria-labelledby="result-heading" className={`rounded-xl border p-5 sm:p-6 ${TONE_CLASSES[tone]}`}>
-      {/* Always mounted so screen readers announce the result when it arrives; per-step progress is announced by the activity log. */}
-      <p role="status" className="sr-only">
-        {finished ? `Search finished. ${title}` : ""}
-      </p>
-      <p className="text-xs font-medium tracking-wide uppercase opacity-75">{finished ? "Result" : "So far"}</p>
-      <h2 id="result-heading" className="mt-1 text-xl font-semibold">
+    <section aria-labelledby="result-heading" className={`rounded-lg border p-5 sm:p-6 ${TONE_CLASSES[tone]}`}>
+      <p className="font-mono text-[0.7rem] tracking-[0.14em] uppercase opacity-75">{finished ? "Result" : "So far"}</p>
+      <h2 id="result-heading" className="mt-1 font-display text-2xl leading-snug">
         {title}
       </h2>
       <p className="mt-2 text-sm">{body}</p>
@@ -204,7 +200,7 @@ function Stat({ term, value }: { term: string; value: number | null }) {
   return (
     <div>
       <dt className="opacity-75">{term}</dt>
-      <dd className="text-lg font-semibold tabular-nums">{value ?? "Unknown"}</dd>
+      <dd className="font-mono text-lg tabular-nums">{value ?? "Unknown"}</dd>
     </div>
   );
 }

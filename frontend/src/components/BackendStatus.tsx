@@ -48,14 +48,16 @@ export function BackendStatus() {
   const { label, dotClass, title } = describe(state);
 
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      title={title}
-      className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700 shadow-sm"
-    >
+    <div title={title} className="inline-flex items-center gap-2 font-mono text-[0.7rem] tracking-[0.1em] text-muted uppercase">
       <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-full ${dotClass}`} />
-      <span>Backend: {label}</span>
+      <span aria-hidden="true" className="hidden sm:inline">
+        Agent
+      </span>
+      {/* Exactly "Backend: <state>" for assistive tech and the e2e smoke test; the visible label reads "Agent <state>". */}
+      <span role="status" aria-live="polite">
+        <span className="sr-only">Backend: </span>
+        <span>{label}</span>
+      </span>
     </div>
   );
 }
@@ -63,14 +65,14 @@ export function BackendStatus() {
 function describe(state: StatusState): { label: string; dotClass: string; title: string } {
   switch (state.kind) {
     case "checking":
-      return { label: "checking…", dotClass: "bg-slate-300 animate-pulse", title: "Contacting backend" };
+      return { label: "checking…", dotClass: "bg-line motion-safe:animate-pulse", title: "Contacting backend" };
     case "online":
       return {
         label: "online",
-        dotClass: "bg-emerald-500",
+        dotClass: "bg-pine",
         title: `${state.health.service} is up (server time ${state.health.time})`,
       };
     case "offline":
-      return { label: "offline", dotClass: "bg-rose-500", title: state.reason };
+      return { label: "offline", dotClass: "bg-alarm", title: state.reason };
   }
 }
