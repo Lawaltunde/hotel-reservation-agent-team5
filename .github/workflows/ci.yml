@@ -77,6 +77,12 @@ jobs:
         working-directory: frontend
         run: npm run typecheck
 
+      # Vitest: models, services and components in jsdom.
+      - name: Unit tests
+        if: hashFiles('frontend/package.json') != ''
+        working-directory: frontend
+        run: npm test
+
       - name: Build
         if: hashFiles('frontend/package.json') != ''
         working-directory: frontend
@@ -123,6 +129,14 @@ jobs:
           SPRING_DATASOURCE_USERNAME: hotelagent
           SPRING_DATASOURCE_PASSWORD: hotelagent
           SPRING_DOCKER_COMPOSE_ENABLED: 'false'
+          # Never reach a real provider from CI, whatever a .env or repo variable says.
+          ELEVENLABS_ENABLED: 'false'
+          GOOGLE_PLACES_ENABLED: 'false'
+          RESEND_ENABLED: 'false'
+          HOTEL_AGENT_ELEVENLABS_ENABLED: 'false'
+          HOTEL_AGENT_GOOGLEPLACES_ENABLED: 'false'
+          HOTEL_AGENT_RESEND_ENABLED: 'false'
+          OPENAI_API_KEY: not-set
         run: |
           JAR=""
           for f in backend/target/hotel-reservation-agent-*.jar; do

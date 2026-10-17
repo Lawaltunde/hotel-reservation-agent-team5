@@ -1,13 +1,127 @@
 @import "tailwindcss";
 
+/*
+ * Palette: Ontario lake and pine, cool rather than warm. Every component colour comes from these
+ * tokens so dark mode is a second set of values, not a second set of classes.
+ */
 :root {
-  color-scheme: light;
+  color-scheme: light dark;
+  --mist: #e8eeeb;
+  --paper: #f7faf8;
+  --ink: #14222c;
+  --muted: #52646e;
+  --line: #c9d5d0;
+  --rule: #c4d6e1;
+  --pine: #22574a;
+  --pine-soft: #dceae4;
+  --lake: #2f6688;
+  --lake-soft: #dde9f0;
+  --lamp: #8a5410;
+  --lamp-soft: #f6e9d3;
+  --lamp-line: #e3c48f;
+  --alarm: #9b2f2f;
+  --alarm-soft: #f5dedc;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mist: #0d151a;
+    --paper: #142029;
+    --ink: #e3eae7;
+    --muted: #9db0b8;
+    --line: #26363f;
+    --rule: #20384a;
+    --pine: #7cc2ac;
+    --pine-soft: #17332c;
+    --lake: #8db8d6;
+    --lake-soft: #172c3a;
+    --lamp: #e7b46a;
+    --lamp-soft: #2e2414;
+    --lamp-line: #5c4520;
+    --alarm: #f09a92;
+    --alarm-soft: #351b1b;
+  }
+}
+
+@theme inline {
+  --color-mist: var(--mist);
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-rule: var(--rule);
+  --color-pine: var(--pine);
+  --color-pine-soft: var(--pine-soft);
+  --color-lake: var(--lake);
+  --color-lake-soft: var(--lake-soft);
+  --color-lamp: var(--lamp);
+  --color-lamp-soft: var(--lamp-soft);
+  --color-lamp-line: var(--lamp-line);
+  --color-alarm: var(--alarm);
+  --color-alarm-soft: var(--alarm-soft);
+
+  --font-display: var(--font-young-serif), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-atkinson), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-atkinson-mono), ui-monospace, "SFMono-Regular", monospace;
 }
 
 body {
-  background-color: #f8fafc;
-  color: #0f172a;
-  font-family:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
-    sans-serif;
+  background-color: var(--mist);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+@layer components {
+  .focus-ring {
+    @apply focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lake;
+  }
+}
+
+@layer components {
+  /* Reservation-slip cards (what we understood, the email): a perforated top edge. */
+  .slip {
+    position: relative;
+  }
+  .slip::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 4px;
+    background-image: radial-gradient(circle at 4px 0, var(--mist) 2px, transparent 2.5px);
+    background-size: 10px 4px;
+    pointer-events: none;
+  }
+}
+
+@keyframes chat-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes typing {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: none;
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chat-in {
+    animation: chat-in 280ms ease-out both;
+  }
+  .typing-dot {
+    animation: typing 1.2s ease-in-out infinite;
+  }
 }
