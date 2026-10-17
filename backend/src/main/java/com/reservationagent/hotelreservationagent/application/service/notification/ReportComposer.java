@@ -14,6 +14,8 @@ import com.reservationagent.hotelreservationagent.domain.task.BookingTask;
 import com.reservationagent.hotelreservationagent.domain.task.StayDetails;
 import com.reservationagent.hotelreservationagent.domain.task.TaskOutcome;
 import com.reservationagent.hotelreservationagent.domain.transcript.Transcript;
+import com.reservationagent.hotelreservationagent.domain.transcript.TranscriptTurn;
+import com.reservationagent.hotelreservationagent.domain.task.TaskIntake;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -110,8 +112,9 @@ public class ReportComposer {
         if (t.intake().originalPrompt() != null) {
             b.append("\nRequest: \"").append(t.intake().originalPrompt().strip()).append("\"\n");
         }
-        if (!t.intake().assumptions().isEmpty()) {
-            b.append("Assumptions: ").append(String.join("; ", t.intake().assumptions())).append('\n');
+        List<String> assumptions = assumptions(t, chosen);
+        if (!assumptions.isEmpty()) {
+            b.append("Assumptions: ").append(String.join("; ", assumptions)).append('\n');
         }
 
         b.append("\nHotels called (").append(ctx.calls().size()).append(", ").append(in.screened())
@@ -207,6 +210,23 @@ public class ReportComposer {
     Recipients recipients(BookingTask task) {
         boolean copy = !reportRecipient.isEmpty() && !reportRecipient.equalsIgnoreCase(task.destinationEmail());
         return new Recipients(task.destinationEmail(), copy ? List.of(reportRecipient) : List.of());
+    }
+
+    /**
+     * The intake's assumptions, plus what the chosen call settled: with no guest count from the guest,
+     * the agent says "one adult" when a hotel insists, so the quote is for one adult.
+     */
+    private static List<String> assumptions(BookingTask t, Optional<CallEvidence> chosen) {
+        List<String> all = new java.util.ArrayList<>(t.intake().assumptions());
+        boolean agentSaidOneAdult = chosen.map(CallEvidence::transcript)
+                .map(tr -> tr.turns().stream().anyMatch(turn -> turn.speaker() == TranscriptTurn.Speaker.AGENT
+                        && turn.text().toLowerCase(java.util.Locale.ROOT).contains("one adult")))
+                .orElse(false);
+        if (!t.intake().isStated(TaskIntake.StatedField.ADULTS) && agentSaidOneAdult) {
+            all.removeIf(a -> a.startsWith("Number of guests not given"));
+            all.add("Guest count not given; hotel quoted for 1 adult");
+        }
+        return all;
     }
 
     /** The offer to report: the evaluator's pick (confirmed available, tiered price), or none. */
