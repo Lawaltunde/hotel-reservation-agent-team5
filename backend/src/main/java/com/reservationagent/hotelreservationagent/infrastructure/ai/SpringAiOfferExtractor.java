@@ -21,6 +21,7 @@ class SpringAiOfferExtractor implements OfferExtractor {
 
     private final ChatClient chatClient;
     private final Resource systemPrompt;
+    private final NullableOutputConverter<ExtractedOffer> outputConverter = new NullableOutputConverter<>(ExtractedOffer.class);
 
     SpringAiOfferExtractor(ChatClient.Builder builder,
                            @Value("classpath:prompts/offer-extraction.st") Resource systemPrompt) {
@@ -40,7 +41,7 @@ class SpringAiOfferExtractor implements OfferExtractor {
                             .param("rooms", String.valueOf(stay.rooms())))
                     .user(transcript)
                     .call()
-                    .entity(ExtractedOffer.class);
+                    .entity(outputConverter);
             if (offer == null) {
                 throw new OfferExtractionException("The AI model returned no structured offer", null);
             }

@@ -30,6 +30,19 @@ datasource. Flyway applies `src/main/resources/db/migration` on startup. Stop th
 Errors are RFC 9457 problem details: 400 has `errors: [...]`, 422 (city not an Ontario municipality,
 or ambiguous) has `suggestions: [...]`.
 
+### Offer fields
+
+Each entry of `offers` in `GET /api/tasks/{id}` is a phone quote, never a booking.
+
+| Field | Meaning |
+|---|---|
+| `negotiatedTotal` | Comparable all-in total, computed in Java: room subtotal + HST + MAT + mandatory fees when all four are known; otherwise `allInTotal` if `taxInclusion` is `INCLUDED`; otherwise `null` (the offer cannot be called cheapest) |
+| `roomSubtotal`, `hst`, `municipalAccommodationTax`, `mandatoryFees`, `optionalFees` | Components as the hotel stated them. Optional fees are never part of `negotiatedTotal` |
+| `allInTotal` | The final total the hotel stated, as said on the call |
+| `totalsDisagree` | `true` when the components sum to more than CA$1 away from `allInTotal`; show a warning |
+| `quoteValidityText` | What the hotel said about how long the quote is valid, verbatim, or `null` |
+| `quoteValidUntil` | Call end + the stated period in hours, or `null` when no period was given. Never produced by the model |
+
 ## Layers
 
 `domain` (plain Java) ← `application` (use cases, ports, rules) ← `infrastructure` (JPA/JdbcClient

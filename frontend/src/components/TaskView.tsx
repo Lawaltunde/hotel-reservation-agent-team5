@@ -9,6 +9,7 @@ import { OfferCard } from "@/components/OfferCard";
 import { ProgressTimeline } from "@/components/ProgressTimeline";
 import { isConfirmedBooking, ResultSummary } from "@/components/ResultSummary";
 import type { ProgressEvent, Task } from "@/models/task";
+import { isTerminalStatus } from "@/models/task";
 import type { ApiError } from "@/services/api-client";
 import { subscribeToTask, type SubscriptionMode } from "@/services/task-service";
 
@@ -103,16 +104,31 @@ function TaskView({ taskId }: { taskId: string }) {
 
       <ProgressTimeline status={status} authorizationMode={task.authorizationMode} events={events} mode={mode} />
 
-      {(task.bestOffer || otherOffers.length > 0) && (
+      {task.bestOffer || otherOffers.length > 0 ? (
         <section aria-labelledby="offers-heading" className="flex flex-col gap-4">
-          <h2 id="offers-heading" className="text-lg font-semibold">
-            Quotes
-          </h2>
+          <div>
+            <h2 id="offers-heading" className="text-lg font-semibold">
+              Quotes
+            </h2>
+            <p className="text-sm text-slate-600">
+              Prices are all-in totals in Canadian dollars. A quote is not a booking; nothing is reserved unless a card says
+              &quot;Booked&quot;.
+            </p>
+          </div>
           {task.bestOffer && <OfferCard offer={task.bestOffer} best booked={isConfirmedBooking(task)} />}
           {otherOffers.map((offer) => (
             <OfferCard key={offer.offerId} offer={offer} />
           ))}
         </section>
+      ) : (
+        isTerminalStatus(status) && (
+          <section aria-labelledby="offers-heading" className="rounded-xl border border-dashed border-slate-300 bg-white p-5">
+            <h2 id="offers-heading" className="text-lg font-semibold">
+              Quotes
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">No quotes were captured for this search.</p>
+          </section>
+        )
       )}
 
       <NewSearchLink />

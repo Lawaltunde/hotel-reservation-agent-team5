@@ -4,7 +4,6 @@ import com.reservationagent.hotelreservationagent.domain.call.CallOutcome;
 import com.reservationagent.hotelreservationagent.domain.task.StayDetails;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.time.LocalDate;
 
 /**
@@ -28,12 +27,14 @@ public interface OfferExtractor {
             BigDecimal municipalAccommodationTax,
             BigDecimal mandatoryFees,
             BigDecimal optionalFees,
+            BigDecimal allInTotal,
             String taxesIncludedInQuote,
             BigDecimal initialQuotedTotal,
             String cancellationTerms,
             String depositTerms,
             String enquiryId,
-            Instant quoteValidUntil,
+            String quoteValidityText,
+            BigDecimal quoteValidityHours,
             Boolean roomHeld,
             Boolean reservationCreated,
             String confirmationNumber,

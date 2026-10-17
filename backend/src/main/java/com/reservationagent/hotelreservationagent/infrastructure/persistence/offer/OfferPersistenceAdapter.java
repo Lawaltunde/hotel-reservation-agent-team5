@@ -3,6 +3,7 @@ package com.reservationagent.hotelreservationagent.infrastructure.persistence.of
 import com.reservationagent.hotelreservationagent.application.port.out.OfferRepository;
 import com.reservationagent.hotelreservationagent.domain.offer.HotelOffer;
 import com.reservationagent.hotelreservationagent.domain.offer.PriceBreakdown;
+import com.reservationagent.hotelreservationagent.domain.offer.QuoteValidity;
 import com.reservationagent.hotelreservationagent.domain.shared.Money;
 import org.springframework.stereotype.Repository;
 
@@ -38,12 +39,15 @@ class OfferPersistenceAdapter implements OfferRepository {
         e.municipalAccommodationTax = amount(p.municipalAccommodationTax());
         e.mandatoryFees = amount(p.mandatoryFees());
         e.optionalFees = amount(p.optionalFees());
+        e.allInTotal = amount(p.allInTotal());
         e.taxInclusion = p.taxInclusion();
         e.comparableTotal = p.comparableTotal().map(Money::amount).orElse(null);
         e.cancellationTerms = o.cancellationTerms();
         e.depositTerms = o.depositTerms();
         e.enquiryId = o.enquiryId();
-        e.quoteValidUntil = o.quoteValidUntil();
+        e.quoteValidUntil = o.quoteValidity().validUntil();
+        e.quoteValidityText = o.quoteValidity().statedText();
+        e.quoteValidityHours = o.quoteValidity().statedHours();
         e.holdsRoom = o.holdsRoom();
         e.evidenceStatus = o.evidenceStatus();
         e.receivedAt = o.receivedAt();
@@ -58,10 +62,10 @@ class OfferPersistenceAdapter implements OfferRepository {
 
     private static HotelOffer toDomain(HotelOfferEntity e) {
         PriceBreakdown p = new PriceBreakdown(money(e.roomSubtotal), money(e.hst), money(e.municipalAccommodationTax),
-                money(e.mandatoryFees), money(e.optionalFees), e.taxInclusion);
+                money(e.mandatoryFees), money(e.optionalFees), money(e.allInTotal), e.taxInclusion);
         return new HotelOffer(e.id, e.taskId, e.hotelId, e.callId, e.availabilityConfirmed, e.checkIn, e.checkOut,
                 e.roomType, e.guestCount, money(e.initialQuotedTotal), p, e.cancellationTerms, e.depositTerms,
-                e.enquiryId, e.quoteValidUntil, e.holdsRoom, e.evidenceStatus, e.receivedAt);
+                e.enquiryId, new QuoteValidity(e.quoteValidityText, e.quoteValidityHours, e.quoteValidUntil), e.holdsRoom, e.evidenceStatus, e.receivedAt);
     }
 
     private static BigDecimal amount(Money m) {

@@ -27,6 +27,8 @@ import { createTask } from "@/services/task-service";
 type Touched = Partial<Record<SearchFormField, boolean>>;
 
 interface OutOfScope {
+  /** True for an ambiguous Ontario name (the backend sends suggestions), false for a city outside Ontario. */
+  ambiguous: boolean;
   detail: string;
   suggestions: string[];
 }
@@ -143,6 +145,7 @@ export function SearchForm() {
       setSubmitting(false);
       if (error instanceof ApiError && error.status === 422) {
         setOutOfScope({
+          ambiguous: error.suggestions.length > 0,
           detail: error.problem?.detail ?? "",
           suggestions: error.suggestions,
         });
@@ -212,7 +215,7 @@ export function SearchForm() {
           </Field>
           {outOfScope && (
             <div id={`${formId}-oos`} role="alert" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-              <p className="font-medium">We only search Ontario.</p>
+              <p className="font-medium">{outOfScope.ambiguous ? "Which Ontario city did you mean?" : "We only search Ontario."}</p>
               <p className="mt-1">
                 {outOfScope.detail || `We couldn't match "${values.city}" to a single Ontario city.`}
               </p>
