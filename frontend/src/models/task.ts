@@ -213,6 +213,8 @@ export interface TaskReport {
   from?: string | null;
   to: string | null;
   cc?: string[] | null;
+  /** Same meaning as `request.emailSource`; preferred when present. */
+  emailSource?: "STATED" | "ORGANIZER_FALLBACK" | (string & {}) | null;
   /** ISO-8601 instant; null if the mail provider hasn't accepted it. */
   sentAt: string | null;
   deliveryStatus: "PENDING" | "ACCEPTED" | "DELIVERED" | "DELAYED" | "BOUNCED" | "FAILED" | (string & {}) | null;
