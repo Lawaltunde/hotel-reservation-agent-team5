@@ -46,24 +46,50 @@ RESEND_FROM=onboarding@resend.dev      # or an address on a verified domain
 
 ## 2. Start (port 8080)
 
-Docker must be running: Spring Boot starts PostGIS from `backend/compose.yaml`. Run from the repo root.
+**For the run, start the self-contained fat jar, not `spring-boot:run` or IntelliJ.** The jar includes the
+UI, so nothing outside it can change under the running app. **Do not build** (`./mvnw install`/`package`)
+while it runs, and never `./mvnw install` into the shared `~/.m2`: running dev instances load the UI from
+there. Build into a private repo with `-Dmaven.repo.local=...` if you must.
+
+The jar does **not** start Postgres. Spring Boot's Docker Compose support is a dev-only dependency and is
+left out of the jar. Start the database first and give the jar its URL:
 
 ```bash
-./mvnw -B install -DskipTests          # once, or after pulling: builds the UI into the backend
+# 1. Build the jar once, before the run (from the repo root; a private Maven repo keeps ~/.m2 untouched)
+./mvnw -B -Dmaven.repo.local=/tmp/team5-m2 package -DskipTests
+cp backend/target/hotel-reservation-agent-0.0.1-SNAPSHOT.jar /tmp/team5-agent.jar   # run this copy
+
+# 2. Database: the same PostGIS as development, on a random host port
+docker compose -f backend/compose.yaml up -d
+DB_PORT=$(docker compose -f backend/compose.yaml port postgres 5432 | cut -d: -f2)
+export SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:$DB_PORT/hotelagent
+export SPRING_DATASOURCE_USERNAME=hotelagent SPRING_DATASOURCE_PASSWORD=hotelagent
+```
+
+```bash
+# 3. Start FROM THE REPO ROOT (the jar reads ./.env for the API keys)
 
 # Variant A (SMTP)
 ELEVENLABS_ENABLED=true GOOGLE_PLACES_ENABLED=true \
 APP_PUBLIC_BASE_URL=https://<tunnel> REPORT_RECIPIENT=<organizer inbox> \
 APP_EMAIL_TRANSPORT=smtp SMTP_HOST=smtp.gmail.com SMTP_PORT=587 \
 SMTP_USERNAME=<gmail> SMTP_PASSWORD='<app password>' \
-./mvnw -pl backend spring-boot:run
+java -jar /tmp/team5-agent.jar
 
 # Variant B (Resend)
 ELEVENLABS_ENABLED=true GOOGLE_PLACES_ENABLED=true \
 APP_PUBLIC_BASE_URL=https://<tunnel> REPORT_RECIPIENT=<organizer inbox> \
 APP_EMAIL_TRANSPORT=resend RESEND_ENABLED=true RESEND_FROM=onboarding@resend.dev \
-./mvnw -pl backend spring-boot:run
+java -jar /tmp/team5-agent.jar
 ```
+
+Check the startup log for `apiKeyConfigured=true`. If it says the OpenAI key is not set, you did not start
+from the repo root: the jar looks for `.env` in the current directory (or `../.env`).
+
+Do not run a second instance (dev or jar) against the same database during the run. Each instance's
+watchdog would also act on the other's tasks.
+
+Development only: `./mvnw -pl backend spring-boot:run` starts Postgres automatically through Docker Compose.
 
 UI and API are both on http://localhost:8080. Start the tunnel to 8080
 (`cloudflared tunnel --url http://localhost:8080`). If cloudflared restarts the URL changes, and
