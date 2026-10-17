@@ -5,6 +5,7 @@ import com.reservationagent.hotelreservationagent.application.service.notificati
 import com.reservationagent.hotelreservationagent.application.service.notification.ReportComposer.Composed;
 import com.reservationagent.hotelreservationagent.application.service.notification.ReportComposer.ReportContext;
 import com.reservationagent.hotelreservationagent.application.service.notification.ReportComposer.ReportInput;
+import com.reservationagent.hotelreservationagent.application.service.pricing.OfferEvaluator;
 import com.reservationagent.hotelreservationagent.domain.task.TaskOutcome;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -21,17 +22,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ReportComposerRecipientsTest {
 
     private static Composed compose(String subject, String organizer, String from) {
-        return new ReportComposer(subject, organizer, from, CLOCK).compose(
+        return new ReportComposer(subject, subject + " (unconfirmed)", organizer, from, new OfferEvaluator(CLOCK, new java.math.BigDecimal("0.06")), CLOCK).compose(
                 new ReportInput(task(), "Ottawa", TaskOutcome.NO_ELIGIBLE_HOTELS, null, null, null, List.of(), 0, 0),
                 new ReportContext(List.of(), new AiUsageRepository.Totals(0, 0, 0)));
     }
 
     @Test
-    void theConfiguredSubjectIsUsedForTheEmailTheStoredReportAndTheFirstLine() {
+    void withNoOptionTheConfiguredUnconfirmedSubjectIsUsedForTheEmailAndTheStoredReport() {
         Composed c = compose("Team 5 - Dry Run", "", null);
-        assertThat(c.email().subject()).isEqualTo("Team 5 - Dry Run");
-        assertThat(c.report().subject()).isEqualTo("Team 5 - Dry Run");
-        assertThat(c.email().textBody()).startsWith("Team 5 - Dry Run\n");
+        assertThat(c.email().subject()).isEqualTo("Team 5 - Dry Run (unconfirmed)");
+        assertThat(c.report().subject()).isEqualTo(c.email().subject());
+        assertThat(c.email().textBody()).startsWith("Team 5 - hotel enquiry result\n");
     }
 
     @Test
