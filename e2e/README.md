@@ -49,7 +49,7 @@ query Google or send email (Resend or SMTP). (Backend tests are guarded separate
 `ProviderSafetyEnvironmentPostProcessor` in `backend/src/test`.)
 
 The chat specs need the app's prompt reader (OpenAI) answered by the mock in
-`support/mock-openai.mjs`, which picks a fixed reading by keyword ("ottawa", "vancouver",
+`support/mock-openai.mjs`, which picks a fixed reading by keyword ("ottawa", "seattle",
 "explode" for an outage). Start it first and point the app at it:
 
 ```bash

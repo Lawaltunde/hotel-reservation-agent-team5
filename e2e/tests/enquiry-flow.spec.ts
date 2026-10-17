@@ -6,7 +6,7 @@ import { expect, test, type Page } from "@playwright/test";
  *
  * Needs the app pointed at the mock prompt reader (support/mock-openai.mjs) and a fresh database:
  * the hotel index is empty and Places is off, so an Ottawa search ends COMPLETED with
- * NO_ELIGIBLE_HOTELS. The mock picks its reading by keyword: "ottawa", "vancouver", "explode".
+ * NO_ELIGIBLE_HOTELS. The mock picks its reading by keyword: "ottawa", "seattle", "explode".
  */
 
 const EMAIL = "e2e-traveller@example.com";
@@ -68,9 +68,8 @@ test.describe("chat intake", () => {
     await page.goto("/");
 
     const rejected = page.waitForResponse((r) => r.url().endsWith("/api/tasks/prompt") && r.request().method() === "POST");
-    // Vancouver is out of scope for the backend under test; CI's stub interpreter only knows seeded names.
-    // TODO(test agent): switch to a non-Canadian city the stub knows once the backend goes Canada-wide.
-    await say(page, `hotel in Vancouver tomorrow for 2 nights, ${EMAIL}`);
+    // Not in Canada, so out of scope whichever province set the backend supports.
+    await say(page, `hotel in Seattle tomorrow for 2 nights, ${EMAIL}`);
     expect((await rejected).status()).toBe(422);
 
     await expect(page.getByText(/I can only search hotels in Canada\..*Which Canadian city should I search\?/)).toBeVisible();
