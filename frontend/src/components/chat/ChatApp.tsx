@@ -14,7 +14,7 @@ const EXAMPLES = [
   "Halifax, Nov 20–22, 2 adults, under $250 a night. Email me at alex@example.com",
   "yo need a hotel in montréal friday cheap pls, free parking. my mail is sam@example.com",
   "Cheapest room in downtown Calgary for 1 adult, Jan 14–16, must have Wi-Fi. Results to jordan@example.com",
-  "Vancouver, family of 4, Dec 27 to Jan 2, pool please. Send results to casey@example.com",
+  "Vancouver, family of 4, Dec 27 to Jan 2, pool please. Results to casey@example.com",
 ];
 
 const STEPS = [

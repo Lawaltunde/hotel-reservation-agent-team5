@@ -64,14 +64,14 @@ test.describe("chat intake", () => {
     await expect(page).not.toHaveURL(/[?&]task=/);
   });
 
-  test("a city outside Ontario gets an answer, not a task", async ({ page }) => {
+  test("a city outside Canada gets an answer, not a task", async ({ page }) => {
     await page.goto("/");
 
     const rejected = page.waitForResponse((r) => r.url().endsWith("/api/tasks/prompt") && r.request().method() === "POST");
-    await say(page, `hotel in Vancouver tomorrow for 2 nights, ${EMAIL}`);
+    await say(page, `hotel in Seattle tomorrow for 2 nights, ${EMAIL}`);
     expect((await rejected).status()).toBe(422);
 
-    await expect(page.getByText(/I can only search hotels in Ontario\..*Which Ontario city should I search\?/)).toBeVisible();
+    await expect(page.getByText(/I can only search hotels in Canada\..*Which Canadian city should I search\?/)).toBeVisible();
     await expect(page).not.toHaveURL(/[?&]task=/);
     await expect(composer(page)).toBeEnabled();
   });
