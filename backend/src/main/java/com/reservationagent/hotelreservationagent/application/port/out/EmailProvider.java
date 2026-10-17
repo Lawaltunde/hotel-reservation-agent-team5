@@ -18,4 +18,14 @@ public interface EmailProvider {
 
     record Attachment(String filename, String contentType, byte[] content) {
     }
+
+    /**
+     * The provider refused the message because of a recipient or sender permission (e.g. a Resend
+     * sandbox key that may only send to the account owner), not a transient failure.
+     */
+    class RecipientRejectedException extends RuntimeException {
+        public RecipientRejectedException(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
 }
