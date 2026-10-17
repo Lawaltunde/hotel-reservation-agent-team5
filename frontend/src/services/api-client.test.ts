@@ -71,6 +71,16 @@ describe("apiRequest", () => {
     expect(error.isNetworkError).toBe(false);
   });
 
+  it("keeps a JSON error body that isn't a problem detail", async () => {
+    respond(503, JSON.stringify({ status: "DOWN", service: "hotel-reservation-agent", database: "DOWN" }), "application/json");
+
+    const error = await failure(apiRequest("/health"));
+    expect(error.status).toBe(503);
+    expect(error.problem).toBeUndefined();
+    expect(error.body).toEqual({ status: "DOWN", service: "hotel-reservation-agent", database: "DOWN" });
+    expect(error.message).toBe("Request to /health returned HTTP 503");
+  });
+
   it("reads 400 errors in the {field, message} shape", async () => {
     respond(
       400,

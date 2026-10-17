@@ -17,8 +17,9 @@ export function findEmails(text: string): string[] {
 
 /**
  * Joins the user's messages, oldest first, into the prompt sent to `POST /api/tasks/prompt`.
- * The backend rejects a prompt with two email addresses, so the latest message that contains an
- * email wins and addresses in earlier messages are dropped. That lets "use bob@y.ca instead" work.
+ * The latest message that contains an email wins and addresses in earlier messages are dropped,
+ * so a correction ("use bob@y.ca instead") reaches the backend as the only address and can't be
+ * misread as a second recipient.
  */
 export function buildPrompt(messages: readonly string[]): string {
   let lastWithEmail = -1;

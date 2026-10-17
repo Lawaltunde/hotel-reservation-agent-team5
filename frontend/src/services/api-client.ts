@@ -22,6 +22,8 @@ export class ApiError extends Error {
     readonly status?: number,
     /** Parsed problem details from the response body, if any. */
     readonly problem?: ProblemDetail,
+    /** The parsed JSON error body, whatever its shape (e.g. a 503 health body that isn't a problem). */
+    readonly body?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
@@ -99,10 +101,11 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const text = await response.text().catch(() => "");
 
   if (!response.ok) {
-    const problem = parseProblem(text);
+    const body = parseJson(text);
+    const problem = isProblemDetail(body) ? body : undefined;
     const message =
       problem?.detail ?? problem?.title ?? `Request to ${path} returned HTTP ${response.status}`;
-    throw new ApiError(message, response.status, problem);
+    throw new ApiError(message, response.status, problem, body);
   }
 
   if (text === "") return undefined as T;
@@ -113,11 +116,10 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
 }
 
-function parseProblem(text: string): ProblemDetail | undefined {
+function parseJson(text: string): unknown {
   if (!text) return undefined;
   try {
-    const parsed: unknown = JSON.parse(text);
-    return isProblemDetail(parsed) ? parsed : undefined;
+    return JSON.parse(text);
   } catch {
     return undefined;
   }

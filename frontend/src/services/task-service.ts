@@ -43,23 +43,28 @@ export interface TaskSubscriptionHandlers {
 
 export interface TaskSubscriptionOptions {
   pollIntervalMs?: number;
+  /** While streaming, how often to re-check the task in case the stream goes quiet. */
+  streamCheckIntervalMs?: number;
 }
 
 /**
  * Follows a task until it reaches a terminal status. Prefers SSE (`GET /api/tasks/{id}/events`,
- * event `progress`); if the stream errors, switches to polling `GET /api/tasks/{id}`.
+ * event `progress`); if the stream errors, switches to polling `GET /api/tasks/{id}`. A stream
+ * can also stay open yet never deliver the final event (seen live when the backend's watchdog
+ * finished a task), so while streaming the task is re-checked every `streamCheckIntervalMs`.
  *
  * @returns an unsubscribe function that stops all network activity.
  */
 export function subscribeToTask(
   taskId: string,
   handlers: TaskSubscriptionHandlers,
-  { pollIntervalMs = 3000 }: TaskSubscriptionOptions = {},
+  { pollIntervalMs = 3000, streamCheckIntervalMs = 15_000 }: TaskSubscriptionOptions = {},
 ): () => void {
   const controller = new AbortController();
   let closed = false;
   let eventSource: EventSource | null = null;
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
+  let streamCheck: ReturnType<typeof setInterval> | null = null;
   let lastStatus: string | null = null;
 
   const setMode = (mode: SubscriptionMode) => {
@@ -73,6 +78,7 @@ export function subscribeToTask(
     eventSource?.close();
     eventSource = null;
     if (pollTimer) clearTimeout(pollTimer);
+    if (streamCheck) clearInterval(streamCheck);
     setMode("closed");
   };
 
@@ -112,26 +118,28 @@ export function subscribeToTask(
     return inFlight;
   };
 
+  /** Fetches the task, reports a status change as progress (message `null`), and stops on a terminal status. */
+  const check = async () => {
+    const task = await refresh();
+    if (closed || !task) return;
+    if (task.status !== lastStatus) {
+      lastStatus = task.status;
+      handlers.onProgress?.({ taskId, status: task.status, message: null, at: task.updatedAt });
+    }
+    if (isTerminalStatus(task.status)) close();
+  };
+
   const startPolling = () => {
     if (closed) return;
     eventSource?.close();
     eventSource = null;
+    if (streamCheck) clearInterval(streamCheck);
+    streamCheck = null;
     setMode("polling");
 
     const tick = async () => {
-      const task = await refresh();
-      if (closed) return;
-      if (task) {
-        if (task.status !== lastStatus) {
-          lastStatus = task.status;
-          handlers.onProgress?.({ taskId, status: task.status, message: null, at: task.updatedAt });
-        }
-        if (isTerminalStatus(task.status)) {
-          close();
-          return;
-        }
-      }
-      pollTimer = setTimeout(tick, pollIntervalMs);
+      await check();
+      if (!closed) pollTimer = setTimeout(tick, pollIntervalMs);
     };
     pollTimer = setTimeout(tick, pollIntervalMs);
   };
@@ -146,6 +154,7 @@ export function subscribeToTask(
     eventSource = source;
 
     source.onopen = () => setMode("live");
+    streamCheck = setInterval(() => void check(), streamCheckIntervalMs);
     source.addEventListener("progress", (message: MessageEvent<string>) => {
       if (closed) return;
       let event: ProgressEvent;
