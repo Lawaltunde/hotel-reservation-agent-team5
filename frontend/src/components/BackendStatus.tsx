@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import type { HealthStatus } from "@/models/health";
-import { getHealth } from "@/services/api-client";
+import { ApiError, getHealth } from "@/services/api-client";
 
 const POLL_INTERVAL_MS = 15000;
 
@@ -30,9 +30,11 @@ export function BackendStatus() {
         );
       } catch (error) {
         if (controller.signal.aborted) return;
+        // A 503 health body says which part is down; name it rather than the bare status code.
+        const databaseDown = error instanceof ApiError && (error.body as Partial<HealthStatus> | undefined)?.database === "DOWN";
         setState({
           kind: "offline",
-          reason: error instanceof Error ? error.message : "Unknown error",
+          reason: databaseDown ? "The backend's database is unavailable" : error instanceof Error ? error.message : "Unknown error",
         });
       }
     }
