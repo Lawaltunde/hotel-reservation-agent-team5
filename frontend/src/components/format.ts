@@ -56,6 +56,18 @@ export function formatQuoteValidity(offer: Pick<Offer, "quoteValidUntil" | "quot
   return null;
 }
 
+/**
+ * The price an offer is ranked by. Prefers `price` (newer backends) and falls back to the all-in
+ * `negotiatedTotal`. An estimate is flagged so it is never presented as a stated total.
+ */
+export function rankingPrice(offer: Pick<Offer, "price" | "estimated" | "negotiatedTotal">): { amount: number | null; estimated: boolean } {
+  const amount = offer.price ?? offer.negotiatedTotal ?? null;
+  return { amount, estimated: amount !== null && offer.estimated === true };
+}
+
+/** The wording used everywhere an estimated price appears. */
+export const ESTIMATE_NOTE = "incl. HST; municipal accommodation tax not confirmed";
+
 /** Time of day only, for the progress log. */
 export function formatTime(iso: string | null | undefined): string {
   if (!iso) return "";
