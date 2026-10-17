@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  formatBytes,
   formatInstant,
   formatMoney,
   formatStayDate,
@@ -70,5 +71,16 @@ describe("labels", () => {
 
   it("humanizes enum names", () => {
     expect(humanize("REFERENCE_ID_GIVEN")).toBe("Reference id given");
+  });
+});
+
+describe("formatBytes", () => {
+  it("formats sizes and treats unknown as null", () => {
+    expect(formatBytes(512)).toBe("512 B");
+    expect(formatBytes(412_345)).toBe("403 KB");
+    expect(formatBytes(3_565_158)).toBe("3.4 MB");
+    expect(formatBytes(null)).toBeNull();
+    expect(formatBytes(undefined)).toBeNull();
+    expect(formatBytes(-1)).toBeNull();
   });
 });
