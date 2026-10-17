@@ -1,7 +1,6 @@
 package com.reservationagent.hotelreservationagent.integration;
 
 import com.reservationagent.hotelreservationagent.support.TestcontainersConfiguration;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
@@ -11,7 +10,6 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.client.RestTestClient;
 
 /** End-to-end check of {@code GET /api/health} over real HTTP. */
-@Disabled("enable after backend phase 1 merges")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureRestTestClient
 @Import(TestcontainersConfiguration.class)
