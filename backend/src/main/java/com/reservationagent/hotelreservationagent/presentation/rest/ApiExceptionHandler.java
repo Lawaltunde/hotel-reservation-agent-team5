@@ -2,10 +2,12 @@ package com.reservationagent.hotelreservationagent.presentation.rest;
 
 import com.reservationagent.hotelreservationagent.application.service.validation.OutOfScopeLocationException;
 import com.reservationagent.hotelreservationagent.application.service.validation.RequestValidationException;
+import com.reservationagent.hotelreservationagent.application.service.validation.RequestValidationException.FieldError;
 import com.reservationagent.hotelreservationagent.domain.shared.DomainException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpHeaders;
@@ -23,8 +25,10 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.exc.MismatchedInputException;
 
 /**
- * RFC 9457 problem details for the API. 400 bodies carry {@code errors: [...]}; 422 bodies carry
- * {@code suggestions: [...]} (other Ontario municipalities the city could mean).
+ * RFC 9457 problem details for the API. 400 bodies carry {@code errors: [{field, message}]}, where
+ * {@code field} is the request field's JSON name or {@code null} for the whole request; 422 bodies
+ * carry {@code suggestions: [...]} (other Ontario municipalities the city could mean); 503 means the
+ * AI provider that reads a free-text prompt is unavailable.
  */
 @RestControllerAdvice
 public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
@@ -36,7 +40,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(DomainException.class)
     ProblemDetail domainRuleViolated(DomainException e) {
-        return badRequest(List.of(e.getMessage()));
+        return badRequest(List.of(new FieldError(null, e.getMessage())));
     }
 
     @ExceptionHandler(OutOfScopeLocationException.class)
@@ -58,9 +62,9 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException ex,
                                                                   HttpHeaders headers, HttpStatusCode status,
                                                                   WebRequest request) {
-        List<String> errors = ex.getBindingResult().getFieldErrors().stream()
-                .map(f -> f.getField() + ": " + f.getDefaultMessage())
-                .sorted()
+        List<FieldError> errors = ex.getBindingResult().getFieldErrors().stream()
+                .map(f -> new FieldError(f.getField(), f.getDefaultMessage()))
+                .sorted(Comparator.comparing(FieldError::field).thenComparing(FieldError::message))
                 .toList();
         return ResponseEntity.badRequest().body(badRequest(errors));
     }
@@ -72,8 +76,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.badRequest().body(badRequest(List.of(unreadableReason(ex))));
     }
 
-    /** "field: reason" for a bad value (wrong enum, malformed date), else a generic message. */
-    private static String unreadableReason(HttpMessageNotReadableException ex) {
+    /** The field and reason for a bad value (wrong enum, malformed date), else a request-level message. */
+    private static FieldError unreadableReason(HttpMessageNotReadableException ex) {
         JacksonException json = null;
         for (Throwable t = ex; t != null && json == null; t = t.getCause() == t ? null : t.getCause()) {
             if (t instanceof JacksonException j) {
@@ -85,7 +89,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                     .map(r -> r.getPropertyName() != null ? r.getPropertyName() : "[" + r.getIndex() + "]")
                     .collect(Collectors.joining("."));
             if (field.isEmpty()) {
-                return "Request body is not valid JSON";
+                return new FieldError(null, "Request body is not valid JSON");
             }
             Class<?> target = json instanceof MismatchedInputException m ? m.getTargetType() : null;
             String reason;
@@ -98,13 +102,14 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             } else {
                 reason = "has an invalid value";
             }
-            return field + ": " + reason;
+            return new FieldError(field, reason);
         }
-        return "Request body is missing or is not valid JSON";
+        return new FieldError(null, "Request body is missing or is not valid JSON");
     }
 
-    private static ProblemDetail badRequest(List<String> errors) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, String.join("; ", errors));
+    private static ProblemDetail badRequest(List<FieldError> errors) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+                errors.stream().map(FieldError::toString).collect(Collectors.joining("; ")));
         problem.setTitle("Invalid request");
         problem.setProperty("errors", errors);
         return problem;
