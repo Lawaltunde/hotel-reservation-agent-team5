@@ -3,6 +3,7 @@ package com.reservationagent.hotelreservationagent.application.service.intake;
 import com.reservationagent.hotelreservationagent.application.port.in.SubmitBookingTaskUseCase;
 import com.reservationagent.hotelreservationagent.application.port.in.SubmitBookingTaskUseCase.Command;
 import com.reservationagent.hotelreservationagent.application.port.in.SubmitTaskPromptUseCase;
+import com.reservationagent.hotelreservationagent.application.port.out.AiUsageRepository;
 import com.reservationagent.hotelreservationagent.application.port.out.BookingTaskRepository;
 import com.reservationagent.hotelreservationagent.application.port.out.TaskPromptInterpreter;
 import com.reservationagent.hotelreservationagent.application.port.out.TaskPromptInterpreter.InterpretedPrompt;
@@ -67,11 +68,13 @@ public class TaskPromptService implements SubmitTaskPromptUseCase {
     private final Clock clock;
     private final Duration defaultDeadline;
     private final String organizerEmail;
+    private final AiUsageRepository usage;
 
     public TaskPromptService(TaskPromptInterpreter interpreter, SubmitBookingTaskUseCase submitTask,
                              BookingRequestValidator validator, BookingTaskRepository tasks, Clock clock,
                              @Value("${app.intake.default-deadline:PT30M}") Duration defaultDeadline,
-                             @Value("${app.report.recipient:}") String organizerEmail) {
+                             @Value("${app.report.recipient:}") String organizerEmail, AiUsageRepository usage) {
+        this.usage = usage;
         this.interpreter = interpreter;
         this.submitTask = submitTask;
         this.validator = validator;
@@ -112,7 +115,9 @@ public class TaskPromptService implements SubmitTaskPromptUseCase {
             errors.add(new FieldError("email", "Include the email address the result should be sent to"));
         }
 
-        InterpretedPrompt p = interpreter.interpret(EMAIL.matcher(prompt).replaceAll(EMAIL_PLACEHOLDER));
+        TaskPromptInterpreter.Interpretation interpretation =
+                interpreter.interpret(EMAIL.matcher(prompt).replaceAll(EMAIL_PLACEHOLDER));
+        InterpretedPrompt p = interpretation.prompt();
 
         LocalDate today = LocalDate.now(clock.withZone(Municipality.DEFAULT_TIME_ZONE));
         LocalDate checkIn = resolve(p.checkIn(), today, today, "check-in", assumptions);
@@ -165,11 +170,14 @@ public class TaskPromptService implements SubmitTaskPromptUseCase {
             }
             throw new RequestValidationException(errors);
         }
+        UUID taskId;
         try {
-            return submitTask.submit(command);
+            taskId = submitTask.submit(command);
         } catch (RequestValidationException e) {
             throw merged(List.of(), e.errors());
         }
+        usage.record(taskId, "prompt-intake", interpretation.usage(), 0);
+        return taskId;
     }
 
     /**
