@@ -3,6 +3,7 @@ package com.reservationagent.hotelreservationagent.unit.application;
 import com.reservationagent.hotelreservationagent.application.port.out.AiUsageRepository;
 import com.reservationagent.hotelreservationagent.application.port.out.EmailProvider.Email;
 import com.reservationagent.hotelreservationagent.application.service.notification.ReportComposer;
+import com.reservationagent.hotelreservationagent.application.service.notification.SentReport;
 import com.reservationagent.hotelreservationagent.application.service.notification.ReportComposer.CallEvidence;
 import com.reservationagent.hotelreservationagent.application.service.notification.ReportComposer.Composed;
 import com.reservationagent.hotelreservationagent.application.service.notification.ReportComposer.ReportContext;
@@ -207,9 +208,11 @@ class ReportComposerTest {
         assertThat(composed.email().attachments().get(0).contentType()).isEqualTo("audio/mpeg");
         assertThat(new String(composed.email().attachments().get(1).content(), java.nio.charset.StandardCharsets.UTF_8))
                 .isEqualTo("[00:00] Agent: Is a room available?\n[00:02] Hotel: Yes.\n");
-        assertThat(composed.report().attachments()).containsExactly(
+        assertThat(composed.report().attachments()).extracting(SentReport.AttachmentInfo::fileName).containsExactly(
                 "call-1-rideau-inn.mp3", "call-1-rideau-inn-transcript.txt",
                 "call-2-budget-motel.mp3", "call-2-budget-motel-transcript.txt");
+        assertThat(composed.report().attachments().get(0))
+                .isEqualTo(new SentReport.AttachmentInfo("call-1-rideau-inn.mp3", "audio/mpeg", 20));
         assertThat(composed.email().textBody()).contains("Attachments: call-1-rideau-inn.mp3, ");
     }
 

@@ -24,7 +24,7 @@ public record ReportResponse(
         long tokensSpent,
         SentReport.Tokens tokens,
         List<SentReport.TranscriptEntry> transcripts,
-        List<String> attachments
+        List<SentReport.AttachmentInfo> attachments
 ) {
 
     static ReportResponse from(SentReport report, EmailDelivery delivery) {
