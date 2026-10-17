@@ -23,6 +23,9 @@ public record Municipality(
 
     public static final String PROVINCE_CODE = "CA-ON";
 
+    /** Eastern time, used for "today" in Ontario. A few north-western municipalities use Central time. */
+    public static final ZoneId DEFAULT_TIME_ZONE = ZoneId.of("America/Toronto");
+
     public Municipality {
         aliases = aliases == null ? Set.of() : Set.copyOf(aliases);
     }
