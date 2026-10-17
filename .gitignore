@@ -13,3 +13,9 @@
 target/
 node_modules/
 .next/
+
+# Claude Code agent worktrees
+.claude/
+
+# Frontend build tooling downloaded by Maven
+frontend/node/

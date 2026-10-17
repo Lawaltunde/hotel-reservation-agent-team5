@@ -792,72 +792,66 @@ unless explicitly authorized.
 
 ## 18. Repository structure
 
+One repository, one Maven build, one deployable. The frontend and backend stay separate
+source modules (different toolchains, with the HTTP API as the only contract between them),
+but the root build packages the Next.js static export into the Spring Boot jar, so one process
+serves the UI at `/` and the API at `/api/**` from the same origin.
+
 ```text
-hotel-deal-agent/
-├── backend/
-│   └── src/main/java/com/example/hotelagent/
-│       ├── api/
-│       ├── orchestration/
-│       ├── geography/          # Ontario municipalities, time zones, MAT config
-│       ├── discovery/
-│       │   ├── index/          # queries against the local hotel index
-│       │   ├── enrichment/     # Google Places, price API
-│       │   └── ranking/
-│       ├── voice/
-│       ├── booking/
-│       ├── verification/
-│       ├── notification/
-│       ├── persistence/
-│       ├── observability/
-│       └── config/
-├── ingestion/
-│   ├── category-map.yml        # OSM / Overture / Foursquare → property type
-│   ├── brand-tiers.yml         # brand:wikidata → price tier
-│   └── src/...                 # download, filter, normalize, dedupe, load
-├── frontend/
-├── infra/
-│   ├── docker-compose.yml      # postgis, app
-│   └── migrations/
-├── docs/
-│   ├── architecture.md
-│   ├── data-sources.md
-│   ├── voice-agent-prompt.md
-│   └── runbook.md
+hotel-reservation-agent-team5/
+├── pom.xml                         # root aggregator: open this folder in IntelliJ
+├── mvnw, mvnw.cmd, .mvn/           # Maven wrapper (use from the root)
+├── backend/                        # Spring Boot 4.1, Java 25
+│   ├── pom.xml                     # depends on the frontend module (runtime)
+│   ├── compose.yaml                # PostGIS for local dev (multi-arch image)
+│   └── src/
+│       ├── main/java/com/reservationagent/hotelreservationagent/
+│       │   ├── domain/             # pure model, one sub-package per model (no framework)
+│       │   ├── application/        # use cases, ports, deterministic business rules
+│       │   ├── infrastructure/     # PostgreSQL/PostGIS, WebClient API clients, Spring AI
+│       │   ├── presentation/       # REST controllers, DTOs, webhooks, SSE, web config
+│       │   └── ingestion/          # offline job that builds the Ontario hotel index
+│       ├── main/resources/db/migration/   # Flyway
+│       └── test/java/.../          # architecture/, integration/ (*IT), unit/ (*Test), support/
+├── frontend/                       # Next.js 16 (App Router), TypeScript, Tailwind
+│   ├── pom.xml                     # builds the static export (Node downloaded by Maven)
+│   └── src/
+│       ├── app/                    # routes and layouts
+│       ├── components/             # UI components
+│       ├── models/                 # API types
+│       └── services/               # API client
+├── .github/workflows/ci.yml
 ├── .env.example
-├── .gitignore
 └── README.md
 ```
 
-Provider integrations sit behind small interfaces — `HotelIndex`, `HotelEnrichmentProvider`,
-`HotelPriceProvider`, `VoiceCallProvider`, `EmailProvider` — so providers can be swapped
-without touching the orchestrator.
+Layer rules are enforced by `ArchitectureTest` (ArchUnit). Provider integrations sit behind small
+interfaces (`HotelIndex`, `HotelEnrichmentProvider`, `HotelPriceProvider`, `VoiceCallProvider`,
+`EmailProvider`), so providers can be swapped without touching the orchestrator.
 
 ---
 
 ## 19. Getting started
 
-> The commands below describe the intended setup; they will work once the corresponding
-> modules exist.
->
-> **Backend today:** `cd hotel-reservation-agent && ./mvnw spring-boot:run` (needs Docker; PostGIS
-> starts automatically). See [`hotel-reservation-agent/README.md`](hotel-reservation-agent/README.md).
+Requirements: JDK 25+, Docker running. Node is only needed for frontend hot reload; the Maven
+build downloads its own copy.
 
 ```bash
-# 1. Configuration
-cp .env.example .env    # ElevenLabs, Twilio, Google Places, Resend keys
+cp .env.example .env                  # API keys (all optional for local dev)
 
-# 2. Database
-docker compose -f infra/docker-compose.yml up -d postgis
-
-# 3. Build the Ontario hotel index
-./gradlew :ingestion:run --args="--source=all --region=CA-ON"
-
-# 4. Backend
-./gradlew :backend:bootRun
-
-# 5. Frontend
-cd frontend && npm install && npm run dev
+./mvnw verify                         # build frontend + backend, run all tests
+./mvnw install -DskipTests            # build once so the backend has the UI on its classpath
+./mvnw -pl backend spring-boot:run    # http://localhost:8080 serves UI + API; PostGIS starts automatically
 ```
+
+**IntelliJ:** open the repository root (not `backend/`); the root `pom.xml` imports both modules.
+Run `HotelReservationAgentApplication` from the backend module.
+
+**Frontend hot reload:** with the backend running, `cd frontend && npm ci && npm run dev` serves
+the UI on http://localhost:3000 and proxies `/api/*` to `http://localhost:8080` (`BACKEND_URL`).
+
+**Production artifact:** `./mvnw package` produces `backend/target/hotel-reservation-agent-*.jar`
+containing the UI. Provide the database through `SPRING_DATASOURCE_*` environment variables.
 
 ---
 
