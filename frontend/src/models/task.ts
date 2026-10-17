@@ -227,6 +227,17 @@ export interface TaskReport {
   tokens?: { openAiPromptTokens?: number | null; openAiCompletionTokens?: number | null; elevenLabsCallSeconds?: number | null } | null;
   /** One per call, shown collapsed. */
   transcripts?: ReportTranscript[] | null;
+  /** Files attached to the email (a recording and a transcript per call). Names only; the bytes aren't stored. */
+  attachments?: Array<ReportAttachment | string> | null;
+}
+
+/** An email attachment. Field names are tolerant until the backend confirms them. */
+export interface ReportAttachment {
+  fileName?: string | null;
+  name?: string | null;
+  contentType?: string | null;
+  sizeBytes?: number | null;
+  size?: number | null;
 }
 
 /** A call transcript. Field names are tolerant until the backend confirms them. */

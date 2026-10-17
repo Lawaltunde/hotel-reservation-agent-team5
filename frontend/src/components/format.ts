@@ -68,6 +68,14 @@ export function rankingPrice(offer: Pick<Offer, "price" | "estimated" | "negotia
 /** The wording used everywhere an estimated price appears. */
 export const ESTIMATE_NOTE = "incl. HST; municipal accommodation tax not confirmed";
 
+/** A file size such as "412 KB" or "3.4 MB", or null when unknown. */
+export function formatBytes(bytes: number | null | undefined): string | null {
+  if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return null;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toLocaleString("en-CA", { maximumFractionDigits: 1 })} MB`;
+}
+
 /** Time of day only, for the progress log. */
 export function formatTime(iso: string | null | undefined): string {
   if (!iso) return "";
