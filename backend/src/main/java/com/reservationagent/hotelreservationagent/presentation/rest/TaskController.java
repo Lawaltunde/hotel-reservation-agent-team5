@@ -7,6 +7,7 @@ import com.reservationagent.hotelreservationagent.application.port.in.SubmitBook
 import com.reservationagent.hotelreservationagent.application.port.in.SubmitTaskPromptUseCase;
 import com.reservationagent.hotelreservationagent.application.port.in.SubscribeTaskProgressUseCase;
 import com.reservationagent.hotelreservationagent.domain.task.BookingTask;
+import com.reservationagent.hotelreservationagent.domain.task.TaskIntake;
 import com.reservationagent.hotelreservationagent.presentation.dto.CreateTaskRequest;
 import com.reservationagent.hotelreservationagent.presentation.dto.ProgressEventResponse;
 import com.reservationagent.hotelreservationagent.presentation.dto.PromptTaskRequest;
@@ -73,7 +74,7 @@ public class TaskController {
                 request.authorizationMode(),
                 request.maximumTotalCad(),
                 Boolean.TRUE.equals(request.allowCompetingQuoteDisclosure()),
-                null));
+                TaskIntake.FORM));
         return accepted(taskId);
     }
 

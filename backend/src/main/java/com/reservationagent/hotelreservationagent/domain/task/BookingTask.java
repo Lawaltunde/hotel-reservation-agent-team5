@@ -11,7 +11,7 @@ import java.util.UUID;
  * One user request, from submission to final email. Immutable: state changes return a new instance.
  *
  * @param requestId      client-generated idempotency key
- * @param originalPrompt the free-text request the task was interpreted from, or {@code null} for a form submission
+ * @param intake         how the request was obtained and which fields the user stated
  */
 public record BookingTask(
         UUID id,
@@ -23,7 +23,7 @@ public record BookingTask(
         Money maximumTotal,
         Set<String> requiredAmenities,
         boolean allowCompetingQuoteDisclosure,
-        String originalPrompt,
+        TaskIntake intake,
         Instant deadline,
         TaskStatus status,
         TaskOutcome outcome,
@@ -34,6 +34,7 @@ public record BookingTask(
     public BookingTask {
         requiredAmenities = requiredAmenities == null ? Set.of() : Set.copyOf(requiredAmenities);
         authorizationMode = authorizationMode == null ? AuthorizationMode.ENQUIRY_ONLY : authorizationMode;
+        intake = intake == null ? TaskIntake.FORM : intake;
     }
 
     public BookingTask transitionTo(TaskStatus target, Instant now) {
@@ -41,13 +42,13 @@ public record BookingTask(
             throw new DomainException("Illegal transition " + status + " -> " + target);
         }
         return new BookingTask(id, requestId, municipalityId, stay, destinationEmail, authorizationMode,
-                maximumTotal, requiredAmenities, allowCompetingQuoteDisclosure, originalPrompt, deadline, target, outcome,
+                maximumTotal, requiredAmenities, allowCompetingQuoteDisclosure, intake, deadline, target, outcome,
                 createdAt, now);
     }
 
     public BookingTask withOutcome(TaskOutcome newOutcome, Instant now) {
         return new BookingTask(id, requestId, municipalityId, stay, destinationEmail, authorizationMode,
-                maximumTotal, requiredAmenities, allowCompetingQuoteDisclosure, originalPrompt, deadline, status, newOutcome,
+                maximumTotal, requiredAmenities, allowCompetingQuoteDisclosure, intake, deadline, status, newOutcome,
                 createdAt, now);
     }
 

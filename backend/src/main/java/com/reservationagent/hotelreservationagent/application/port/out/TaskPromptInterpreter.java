@@ -20,9 +20,8 @@ public interface TaskPromptInterpreter {
     /**
      * Every field is {@code null} when the prompt did not say it.
      *
-     * @param nights       stay length, when given instead of (or as well as) a check-out date
-     * @param maxBudgetCad         the most the guest will pay for the whole stay, all-in, in CAD
-     * @param maxBudgetPerNightCad a nightly budget, when that is how the guest put it; Java multiplies it out
+     * @param nights stay length, when given instead of (or as well as) a check-out date
+     * @param notes  other preferences in the guest's words (quiet room, near downtown...), or {@code null}
      */
     record InterpretedPrompt(
             String city,
@@ -32,10 +31,18 @@ public interface TaskPromptInterpreter {
             Integer rooms,
             Integer adults,
             Integer children,
-            BigDecimal maxBudgetCad,
-            BigDecimal maxBudgetPerNightCad,
-            List<String> amenities
+            Budget budget,
+            List<String> amenities,
+            String notes
     ) {
+    }
+
+    /** A budget as the guest put it; Java turns it into a stay total. */
+    record Budget(BigDecimal amount, BudgetUnit unit) {
+    }
+
+    enum BudgetUnit {
+        PER_NIGHT, PER_STAY, UNKNOWN
     }
 
     class InterpreterUnavailableException extends RuntimeException {
