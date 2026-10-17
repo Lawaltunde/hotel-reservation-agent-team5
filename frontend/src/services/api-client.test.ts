@@ -56,7 +56,7 @@ describe("apiRequest", () => {
     await expect(apiRequest("/x")).resolves.toBeUndefined();
   });
 
-  it("turns a 400 problem into an ApiError with the validation messages", async () => {
+  it("turns a 400 problem with legacy string errors into {field, message} entries", async () => {
     respond(
       400,
       JSON.stringify({ status: 400, title: "Invalid request", detail: "checkIn is in the past", errors: ["checkIn is in the past", 7] }),
@@ -66,9 +66,23 @@ describe("apiRequest", () => {
     const error = await failure(apiRequest("/tasks", { method: "POST", body: {} }));
     expect(error.status).toBe(400);
     expect(error.message).toBe("checkIn is in the past");
-    expect(error.errors).toEqual(["checkIn is in the past"]);
+    expect(error.errors).toEqual([{ field: null, message: "checkIn is in the past" }]);
     expect(error.suggestions).toEqual([]);
     expect(error.isNetworkError).toBe(false);
+  });
+
+  it("reads 400 errors in the {field, message} shape", async () => {
+    respond(
+      400,
+      JSON.stringify({ status: 400, title: "Invalid request", errors: [{ field: "email", message: "Include the email address" }, { field: null, message: "Bad JSON" }, { field: "x" }] }),
+      "application/problem+json",
+    );
+
+    const error = await failure(apiRequest("/tasks/prompt", { method: "POST", body: {} }));
+    expect(error.errors).toEqual([
+      { field: "email", message: "Include the email address" },
+      { field: null, message: "Bad JSON" },
+    ]);
   });
 
   it("exposes 422 suggestions", async () => {

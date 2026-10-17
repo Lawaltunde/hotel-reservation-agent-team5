@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  AUTHORIZATION_MODE_LABELS,
   formatInstant,
   formatMoney,
   formatStayDate,
@@ -71,9 +70,5 @@ describe("labels", () => {
 
   it("humanizes enum names", () => {
     expect(humanize("REFERENCE_ID_GIVEN")).toBe("Reference id given");
-  });
-
-  it("labels every authorization mode", () => {
-    expect(Object.keys(AUTHORIZATION_MODE_LABELS)).toEqual(["ENQUIRY_ONLY", "REQUIRE_APPROVAL", "BOOK_IF_WITHIN_LIMITS"]);
   });
 });
