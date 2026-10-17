@@ -19,8 +19,17 @@ public record SentReport(
         Fields fields,
         Tokens tokens,
         List<TranscriptEntry> transcripts,
-        Instant composedAt
+        Instant composedAt,
+        List<AttachmentInfo> attachments
 ) {
+
+    /** An attached file as listed in the stored report (the bytes are not stored). */
+    public record AttachmentInfo(String fileName, String contentType, long sizeBytes) {
+    }
+
+    public SentReport {
+        attachments = attachments == null ? List.of() : List.copyOf(attachments);
+    }
 
     /**
      * @param hotelPhone        the number that was called

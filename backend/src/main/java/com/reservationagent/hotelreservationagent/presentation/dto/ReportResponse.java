@@ -23,7 +23,8 @@ public record ReportResponse(
         SentReport.Fields fields,
         long tokensSpent,
         SentReport.Tokens tokens,
-        List<SentReport.TranscriptEntry> transcripts
+        List<SentReport.TranscriptEntry> transcripts,
+        List<SentReport.AttachmentInfo> attachments
 ) {
 
     static ReportResponse from(SentReport report, EmailDelivery delivery) {
@@ -43,6 +44,7 @@ public record ReportResponse(
                 report.fields(),
                 report.tokens() == null ? 0 : report.tokens().total(),
                 report.tokens(),
-                report.transcripts() == null ? List.of() : report.transcripts());
+                report.transcripts() == null ? List.of() : report.transcripts(),
+                report.attachments() == null ? List.of() : report.attachments());
     }
 }

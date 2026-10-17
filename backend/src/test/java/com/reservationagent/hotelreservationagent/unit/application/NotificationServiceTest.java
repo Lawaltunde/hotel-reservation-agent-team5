@@ -51,7 +51,9 @@ class NotificationServiceTest {
                 .application.port.out.CallRecordingSource.class), CLOCK, "", java.time.Duration.ofDays(30));
         service = new NotificationService(composer, provider, deliveries, mock(PhoneCallRepository.class),
                 mock(OfferRepository.class), mock(HotelIndex.class), usage, mock(ReportRepository.class), recordings,
-                "https://elevenlabs.io/app/conversational-ai/history/{conversationId}", CLOCK);
+                "https://elevenlabs.io/app/agents/history/{conversationId}", CLOCK,
+                mock(com.reservationagent.hotelreservationagent.application.port.out.CallRecordingSource.class),
+                java.time.Duration.ofMillis(100));
     }
 
     private ReportInput input() {
