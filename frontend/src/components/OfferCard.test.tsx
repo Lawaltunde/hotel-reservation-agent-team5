@@ -10,7 +10,7 @@ function row(term: string) {
 }
 
 describe("OfferCard", () => {
-  it("labels a quote as not booked and shows the saving", () => {
+  it("labels a quote as not booked and headlines the all-in total", () => {
     render(<OfferCard offer={makeOffer()} best />);
 
     const card = screen.getByRole("article", { name: "Rideau Inn" });
@@ -19,7 +19,8 @@ describe("OfferCard", () => {
     expect(within(card).queryByText("Booked")).not.toBeInTheDocument();
     expect(within(card).getByText("All-in total, CAD")).toBeInTheDocument();
     expect(within(card).getByText(/^CAD\s366\.00$/)).toBeInTheDocument();
-    expect(within(card).getByText(/CAD\s34\.00 below the first quote of CAD\s400\.00/)).toBeInTheDocument();
+    // No saving is claimed: the first quote may have been pre-tax, so it isn't comparable.
+    expect(within(card).queryByText(/below the first quote/)).not.toBeInTheDocument();
     expect(row("Hotel reference (not a booking)")).toHaveTextContent("ENQ-123");
     expect(row("Evidence")).toHaveTextContent("Reference id given");
   });

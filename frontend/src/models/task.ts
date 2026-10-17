@@ -95,28 +95,12 @@ export type TaskOutcome =
 /** Whether the quoted total includes taxes. Kept open for values the backend may add. */
 export type TaxInclusion = "INCLUDED" | "EXCLUDED" | "UNKNOWN" | (string & {});
 
-/** Body of `POST /api/tasks`. */
-export interface CreateTaskRequest {
-  /** Client-generated UUID; the same value is reused when a submission is retried. */
-  requestId: string;
-  city: string;
-  /** `YYYY-MM-DD`, hotel local date. */
-  checkIn: string;
-  /** `YYYY-MM-DD`, hotel local date. */
-  checkOut: string;
-  rooms: number;
-  adults: number;
-  children: number;
-  destinationEmail: string;
-  /** ISO-8601 instant. */
-  deadline: string;
-  requiredAmenities: string[];
-  authorizationMode: AuthorizationMode;
-  maximumTotalCad: number | null;
-  allowCompetingQuoteDisclosure: boolean;
+/** Body of `POST /api/tasks/prompt`: the user's one free-text request. */
+export interface CreatePromptTaskRequest {
+  prompt: string;
 }
 
-/** `202` response of `POST /api/tasks`. */
+/** `202` response of `POST /api/tasks/prompt`. */
 export interface CreateTaskResponse {
   taskId: string;
   status: TaskStatus;
@@ -142,8 +126,16 @@ export interface Offer {
   /** True when the summed components and the stated all-in total differ by more than CA$1. */
   totalsDisagree?: boolean | null;
   currency: "CAD" | (string & {});
-  hst: number | null;
-  municipalAccommodationTax: number | null;
+  /** Sales tax for the stay (HST in Ontario). The backend may send this or `hst`. */
+  salesTax?: number | null;
+  /** The backend's name for the sales tax, e.g. "HST 13%"; "HST" when absent. */
+  salesTaxLabel?: string | null;
+  /** Accommodation levy for the stay (MAT in Ontario). The backend may send this or `municipalAccommodationTax`. */
+  accommodationLevy?: number | null;
+  /** e.g. "Municipal accommodation tax 4%"; "Municipal accommodation tax" when absent. */
+  levyLabel?: string | null;
+  hst?: number | null;
+  municipalAccommodationTax?: number | null;
   mandatoryFees: number | null;
   /** Removable charges; never part of `negotiatedTotal`. Optional until the backend sends it. */
   optionalFees?: number | null;
@@ -157,6 +149,87 @@ export interface Offer {
   /** The hotel's own words about how long the quote holds, verbatim from the call. */
   quoteValidityText?: string | null;
   evidenceStatus: string | null;
+}
+
+/**
+ * What the backend extracted from the prompt (`TaskRequestResponse`). Only the city is required;
+ * a missing email falls back to the organizer inbox and missing dates or guests are marked unstated.
+ */
+export interface TaskRequest {
+  city: string | null;
+  /** `YYYY-MM-DD`, hotel local date; null when the user didn't say. */
+  checkIn: string | null;
+  checkOut: string | null;
+  adults: number | null;
+  children: number | null;
+  rooms: number | null;
+  /** Maximum all-in for the whole stay, in CAD (a nightly budget is converted server-side). */
+  maxBudget: number | null;
+  /** The nightly amount, only when the user said "per night". */
+  maxBudgetPerNight?: number | null;
+  amenities: string[] | null;
+  /** Free-text preferences, e.g. "quiet room, near downtown". */
+  notes?: string | null;
+  /** Where results go. With `ORGANIZER_FALLBACK` this is the organizer inbox, not the user's. */
+  email: string | null;
+  emailSource?: "STATED" | "ORGANIZER_FALLBACK" | (string & {}) | null;
+  /** The prompt exactly as the user sent it. */
+  originalPrompt: string | null;
+  /** Whether the user gave each field. Unstated fields are null; never show a default as their choice. */
+  stated?: Partial<Record<StatableField, boolean>> | null;
+  /** What the voice agent actually asks hotels for; null means it asks neutrally. */
+  askedFor?: Partial<Record<"checkIn" | "checkOut" | "rooms" | "adults" | "children", string | number | null>> | null;
+  /** Human-readable notes on what the agent assumed, e.g. "No dates given: asking hotels for tonight, one night". */
+  assumptions?: string[] | null;
+}
+
+export type StatableField = "checkIn" | "checkOut" | "adults" | "children" | "rooms" | "maxBudget" | "email";
+
+/** Key facts of the result email, shown prominently above the body. Any of them may be unknown. */
+export interface ReportFields {
+  hotelName?: string | null;
+  hotelAddress?: string | null;
+  hotelPhone?: string | null;
+  /** The hotel's reference number, only if one was given. Never a booking. */
+  reservationNumber?: string | null;
+  checkIn?: string | null;
+  checkOut?: string | null;
+  price?: number | null;
+  currency?: string | null;
+  /** e.g. "all-in, taxes included (quoted, not booked)". */
+  priceNote?: string | null;
+  recordingUrl?: string | null;
+  conversationUrl?: string | null;
+}
+
+/** The result email exactly as sent (`report` on `GET /api/tasks/{id}`). */
+export interface TaskReport {
+  subject: string | null;
+  from?: string | null;
+  to: string | null;
+  cc?: string[] | null;
+  /** ISO-8601 instant; null if the mail provider hasn't accepted it. */
+  sentAt: string | null;
+  deliveryStatus: "PENDING" | "ACCEPTED" | "DELIVERED" | "DELAYED" | "BOUNCED" | "FAILED" | (string & {}) | null;
+  /** Exactly what was sent. */
+  bodyText: string | null;
+  /** Rendered only inside a sandboxed iframe, never injected into the page. */
+  bodyHtml?: string | null;
+  fields?: ReportFields | null;
+  tokensSpent?: number | null;
+  tokens?: { openAiPromptTokens?: number | null; openAiCompletionTokens?: number | null; elevenLabsCallSeconds?: number | null } | null;
+  /** One per call, shown collapsed. */
+  transcripts?: ReportTranscript[] | null;
+}
+
+/** A call transcript. Field names are tolerant until the backend confirms them. */
+export interface ReportTranscript {
+  hotelName?: string | null;
+  conversationId?: string | null;
+  conversationUrl?: string | null;
+  recordingUrl?: string | null;
+  startedAt?: string | null;
+  text?: string | null;
 }
 
 /** `GET /api/tasks/{id}`. */
@@ -178,6 +251,10 @@ export interface Task {
   offers: Offer[];
   createdAt: string;
   updatedAt: string;
+  /** How the prompt was interpreted. Optional until the backend sends it. */
+  request?: TaskRequest | null;
+  /** The result email, once composed. Optional until the backend sends it. */
+  report?: TaskReport | null;
 }
 
 /** Data of an SSE `progress` event on `GET /api/tasks/{id}/events`. */
