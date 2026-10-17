@@ -101,6 +101,8 @@ A variable that is present but empty falls back to the default below.
 | `app.report.conversation-url-template` | `https://elevenlabs.io/app/conversational-ai/history/{conversationId}` | Dashboard link per call (path unverified) |
 | `hotel-agent.policy.max-parallel-calls` / `HOTEL_AGENT_MAX_PARALLEL_CALLS` | `3` | Concurrent calls per task; keep within the ElevenLabs plan limit |
 | `app.report.recipient` / `REPORT_RECIPIENT` | empty | Copied (CC) on every report; the request's email is always the recipient |
+| `app.email.transport` / `APP_EMAIL_TRANSPORT` | `resend` | `resend` (needs `RESEND_ENABLED=true`, else the logging stub) or `smtp` |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | -, `587`, -, -, `SMTP_USERNAME` | SMTP with STARTTLS (required). Gmail: `smtp.gmail.com`, 587, an app password; it sends only as the account or a verified alias |
 | `app.public-base-url` / `APP_PUBLIC_BASE_URL` | empty | Public URL of this backend. Without it the report says the recording link is unavailable |
 | `app.report.recording-link-ttl` / `APP_REPORT_RECORDING_LINK_TTL` | `P30D` | How long an emailed recording link works |
 | `OPENAI_CHAT_MODEL` | `gpt-5.4-mini` | Needs Structured Outputs (JSON schema). |

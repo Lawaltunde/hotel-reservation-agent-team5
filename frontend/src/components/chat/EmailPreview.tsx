@@ -70,11 +70,12 @@ export function EmailPreview({ report }: { report: TaskReport }) {
   if (fields.hotelName) facts.push({ term: "Hotel", value: fields.hotelName });
   if (fields.hotelAddress) facts.push({ term: "Address", value: fields.hotelAddress });
   if (fields.hotelPhone) facts.push({ term: "Phone", value: fields.hotelPhone, href: `tel:${fields.hotelPhone.replace(/[^\d+]/g, "")}`, mono: true });
-  if (fields.price != null) {
-    facts.push({ term: "Quoted price", value: formatMoney(fields.price, fields.currency || "CAD"), mono: true, note: fields.priceNote ?? undefined });
-  }
+  // priceNote is the email's full price text ("366.00 CAD all-in, availability confirmed, not booked").
+  if (fields.priceNote?.trim()) facts.push({ term: "Price", value: fields.priceNote.trim() });
+  else if (fields.price != null) facts.push({ term: "Price", value: formatMoney(fields.price, fields.currency || "CAD"), mono: true });
   if (stay) facts.push({ term: "Stay", value: stay });
   if (fields.reservationNumber) facts.push({ term: "Hotel reference (not a booking)", value: fields.reservationNumber, mono: true });
+  else if (fields.hotelName) facts.push({ term: "Hotel reference", value: "None provided (no reservation made, as instructed)" });
 
   return (
     <article aria-labelledby={`${id}-subject`} className="slip mt-3 overflow-hidden rounded-lg border border-line bg-paper">
