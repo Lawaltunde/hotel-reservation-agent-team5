@@ -20,8 +20,8 @@ public record OfferPrice(Money amount, PriceBasis basis) {
         /** Tier A: the hotel's stated all-in total, taxes included. */
         STATED_ALL_IN(false),
         /**
-         * Tier B: a stated pre-tax charge plus Ontario HST at the legal 13% (or the stated HST) and
-         * any stated mandatory fees. The municipal accommodation tax is not confirmed and not added.
+         * Tier B: a stated pre-tax charge plus the province's sales tax on accommodation (or the stated
+         * tax) and any stated mandatory fees. Accommodation levies are not confirmed and not added.
          */
         ESTIMATED_HST(true);
 

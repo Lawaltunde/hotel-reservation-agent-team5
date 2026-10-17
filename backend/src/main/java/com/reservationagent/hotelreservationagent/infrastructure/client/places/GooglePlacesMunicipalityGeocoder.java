@@ -3,6 +3,7 @@ package com.reservationagent.hotelreservationagent.infrastructure.client.places;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.reservationagent.hotelreservationagent.application.port.out.MunicipalityGeocoder;
 import com.reservationagent.hotelreservationagent.domain.geography.GeoPoint;
+import com.reservationagent.hotelreservationagent.domain.geography.Province;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -16,8 +17,9 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Text Search for "{name}, Ontario, Canada" restricted to localities. Google tolerates typos
- * ("Kingstn" finds Kingston); the result is accepted only if its province is ON.
+ * Text Search for "{name}[, {province}], Canada" restricted to localities. Google tolerates typos
+ * ("Kingstn" finds Kingston); the result is accepted only if it is in Canada, and its province
+ * (administrative_area_level_1) is recorded.
  */
 @Component
 @ConditionalOnProperty(name = "hotel-agent.google-places.enabled", havingValue = "true")
@@ -34,12 +36,13 @@ class GooglePlacesMunicipalityGeocoder implements MunicipalityGeocoder {
     }
 
     @Override
-    public Optional<Locality> findOntarioLocality(String name) {
+    public Optional<Locality> findCanadianLocality(String name, Province provinceHint) {
         try {
             SearchTextResponse response = client.post()
                     .uri("/v1/places:searchText")
                     .header("X-Goog-FieldMask", FIELD_MASK)
-                    .bodyValue(Map.of("textQuery", name + ", Ontario, Canada", "includedType", "locality",
+                    .bodyValue(Map.of("textQuery", name + (provinceHint == null ? "" : ", " + provinceHint.displayName()) + ", Canada",
+                            "includedType", "locality",
                             "pageSize", 1, "regionCode", "CA"))
                     .retrieve()
                     .bodyToMono(SearchTextResponse.class)
@@ -48,14 +51,17 @@ class GooglePlacesMunicipalityGeocoder implements MunicipalityGeocoder {
                 return Optional.empty();
             }
             Place place = response.places().getFirst();
-            boolean inOntario = place.addressComponents() != null && place.addressComponents().stream()
-                    .anyMatch(c -> c.types() != null && c.types().contains("administrative_area_level_1")
-                            && "ON".equals(c.shortText()));
-            if (!inOntario || place.location() == null || place.displayName() == null) {
+            boolean inCanada = place.addressComponents() != null && place.addressComponents().stream()
+                    .anyMatch(c -> c.types() != null && c.types().contains("country") && "CA".equals(c.shortText()));
+            Optional<Province> province = place.addressComponents() == null ? Optional.empty()
+                    : place.addressComponents().stream()
+                            .filter(c -> c.types() != null && c.types().contains("administrative_area_level_1"))
+                            .findFirst().flatMap(c -> Province.parse(c.shortText()));
+            if (!inCanada || province.isEmpty() || place.location() == null || place.displayName() == null) {
                 return Optional.empty();
             }
             return Optional.of(new Locality(place.displayName().text(),
-                    new GeoPoint(place.location().latitude(), place.location().longitude())));
+                    new GeoPoint(place.location().latitude(), place.location().longitude()), province.get()));
         } catch (RuntimeException e) {
             log.warn("Geocoding '{}' failed: {}", name, e.getMessage());
             return Optional.empty();

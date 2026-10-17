@@ -17,15 +17,21 @@ import java.util.Set;
  * @param notes              free-text preferences from the prompt (max {@value #MAX_NOTES_LENGTH} chars), or {@code null}
  * @param maximumPerNight    the nightly budget, only when the user put it that way
  * @param assumptions        human-readable notes on what was assumed for the search
+ * @param provinceHint       the province the guest named ("NS", "Nova Scotia"), or {@code null}
  */
 public record TaskIntake(String originalPrompt, Set<StatedField> stated, EmailSource emailSource, String notes,
-                         Money maximumPerNight, List<String> assumptions) {
+                         Money maximumPerNight, List<String> assumptions, String provinceHint) {
 
     public static final int MAX_NOTES_LENGTH = 300;
 
     /** A form submission: every field was given explicitly. */
     public static final TaskIntake FORM = new TaskIntake(null, EnumSet.allOf(StatedField.class), EmailSource.STATED,
-            null, null, List.of());
+            null, null, List.of(), null);
+
+    public TaskIntake(String originalPrompt, Set<StatedField> stated, EmailSource emailSource, String notes,
+                      Money maximumPerNight, List<String> assumptions) {
+        this(originalPrompt, stated, emailSource, notes, maximumPerNight, assumptions, null);
+    }
 
     public TaskIntake {
         stated = stated == null || stated.isEmpty() ? EnumSet.noneOf(StatedField.class) : EnumSet.copyOf(stated);

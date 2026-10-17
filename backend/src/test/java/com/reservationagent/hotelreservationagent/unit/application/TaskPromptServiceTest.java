@@ -83,7 +83,7 @@ class TaskPromptServiceTest {
 
     private static InterpretedPrompt prompt(String city, DateExpression in, DateExpression out, Integer nights,
                                             Integer rooms, Integer adults, Integer children, Budget budget) {
-        return new InterpretedPrompt(city, in, out, nights, rooms, adults, children, budget, List.of(), null);
+        return new InterpretedPrompt(city, null, in, out, nights, rooms, adults, children, budget, List.of(), null);
     }
 
     private static DateExpression kind(Kind kind) {

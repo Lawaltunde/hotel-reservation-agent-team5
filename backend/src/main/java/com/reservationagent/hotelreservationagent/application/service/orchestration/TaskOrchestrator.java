@@ -82,8 +82,10 @@ public class TaskOrchestrator {
     public void onSubmitted(TaskSubmittedEvent event) {
         UUID taskId = event.taskId();
         try {
-            BookingTask task = state.transition(taskId, TaskStatus.DISCOVERING, "Searching the Ontario hotel index");
-            Municipality municipality = municipalities.findById(task.municipalityId()).orElseThrow();
+            BookingTask pending = tasks.findById(taskId).orElseThrow();
+            Municipality municipality = municipalities.findById(pending.municipalityId()).orElseThrow();
+            BookingTask task = state.transition(taskId, TaskStatus.DISCOVERING, "Searching for hotels in "
+                    + municipality.name() + ", " + municipality.provinceOrOntario().displayName());
             List<HotelCandidate> ranked = discovery.discover(task, municipality);
             if (ranked.isEmpty()) {
                 state.transition(taskId, TaskStatus.NO_CANDIDATES, "No callable hotels found");

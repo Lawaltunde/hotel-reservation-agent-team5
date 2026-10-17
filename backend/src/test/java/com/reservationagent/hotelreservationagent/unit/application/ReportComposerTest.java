@@ -117,7 +117,7 @@ class ReportComposerTest {
         assertThat(composed.email().subject()).isEqualTo(SUBJECT);
         assertThat(line(composed.email(), "Hotel Name")).isEqualTo("Budget Motel");
         assertThat(line(composed.email(), "Price for the stay")).isEqualTo(
-                "≈ CAD 282.50 incl. HST; municipal accommodation tax not confirmed (availability confirmed, not booked)");
+                "≈ CAD 282.50 incl. estimated sales tax; accommodation levies not confirmed (availability confirmed, not booked)");
         assertThat(line(composed.email(), "Reservation #")).isEqualTo("None provided (no reservation made, as instructed)");
         assertThat(composed.report().fields().reservationNumber()).isNull();
     }
