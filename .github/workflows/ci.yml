@@ -136,6 +136,8 @@ jobs:
           HOTEL_AGENT_ELEVENLABS_ENABLED: 'false'
           HOTEL_AGENT_GOOGLEPLACES_ENABLED: 'false'
           HOTEL_AGENT_RESEND_ENABLED: 'false'
+          APP_EMAIL_TRANSPORT: resend
+          SMTP_HOST: ''
           OPENAI_API_KEY: not-set
         run: |
           JAR=""
