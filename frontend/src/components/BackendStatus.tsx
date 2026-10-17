@@ -48,14 +48,16 @@ export function BackendStatus() {
   const { label, dotClass, title } = describe(state);
 
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      title={title}
-      className="inline-flex items-center gap-2 font-mono text-[0.7rem] tracking-[0.1em] text-muted uppercase"
-    >
+    <div title={title} className="inline-flex items-center gap-2 font-mono text-[0.7rem] tracking-[0.1em] text-muted uppercase">
       <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-full ${dotClass}`} />
-      <span className="sr-only sm:not-sr-only">Agent {label}</span>
+      <span aria-hidden="true" className="hidden sm:inline">
+        Agent
+      </span>
+      {/* Exactly "Backend: <state>" for assistive tech and the e2e smoke test; the visible label reads "Agent <state>". */}
+      <span role="status" aria-live="polite">
+        <span className="sr-only">Backend: </span>
+        <span className="sr-only sm:not-sr-only">{label}</span>
+      </span>
     </div>
   );
 }
