@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.util.Base64;
 import java.util.List;
@@ -39,7 +40,17 @@ class ResendEmailProvider implements EmailProvider {
                 .retrieve()
                 .bodyToMono(SendResponse.class)
                 .map(SendResponse::id)
+                .onErrorMap(WebClientResponseException.class, e -> isRecipientRejection(e)
+                        ? new RecipientRejectedException("Resend rejected the recipients: " + e.getStatusCode()
+                                + " " + e.getResponseBodyAsString(), e)
+                        : e)
                 .toFuture();
+    }
+
+    /** 403 (sandbox: only the owner may receive) or 422 validation_error on an address. */
+    private static boolean isRecipientRejection(WebClientResponseException e) {
+        int status = e.getStatusCode().value();
+        return status == 403 || (status == 422 && e.getResponseBodyAsString().contains("validation_error"));
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)

@@ -2,10 +2,12 @@ package com.reservationagent.hotelreservationagent.infrastructure.client.smtp;
 
 import com.reservationagent.hotelreservationagent.application.port.out.EmailProvider;
 import jakarta.mail.MessagingException;
+import jakarta.mail.SendFailedException;
 import jakarta.mail.internet.MimeMessage;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.ByteArrayResource;
+import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
@@ -55,7 +57,14 @@ class SmtpEmailProvider implements EmailProvider {
                 for (Attachment a : email.attachments()) {
                     helper.addAttachment(a.filename(), new ByteArrayResource(a.content()), a.contentType());
                 }
-                mailSender.send(message);
+                try {
+                    mailSender.send(message);
+                } catch (MailSendException e) {
+                    if (e.getFailedMessages().values().stream().anyMatch(SendFailedException.class::isInstance)) {
+                        throw new RecipientRejectedException("SMTP server rejected a recipient: " + e.getMessage(), e);
+                    }
+                    throw e;
+                }
                 String id = message.getMessageID();
                 return id == null ? "smtp-" + System.currentTimeMillis() : id;
             } catch (MessagingException e) {
