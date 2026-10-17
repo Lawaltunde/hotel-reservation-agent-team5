@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.reservationagent.hotelreservationagent.application.port.out.EmailProvider;
 import com.reservationagent.hotelreservationagent.infrastructure.config.HotelAgentProperties;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -15,7 +15,7 @@ import java.util.concurrent.CompletableFuture;
 
 /** Sends the report through the Resend API. A returned ID means accepted, not delivered. */
 @Component
-@ConditionalOnProperty(name = "hotel-agent.resend.enabled", havingValue = "true")
+@ConditionalOnExpression("${hotel-agent.resend.enabled:false} and '${app.email.transport:resend}' != 'smtp'")
 class ResendEmailProvider implements EmailProvider {
 
     private final WebClient client;
