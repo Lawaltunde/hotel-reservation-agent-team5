@@ -1,5 +1,5 @@
 import type { HealthStatus } from "@/models/health";
-import type { ProblemDetail } from "@/models/problem-detail";
+import type { FieldError, ProblemDetail } from "@/models/problem-detail";
 import { isProblemDetail } from "@/models/problem-detail";
 
 /**
@@ -32,9 +32,18 @@ export class ApiError extends Error {
     return this.status === undefined;
   }
 
-  /** Validation messages from a 400 response. */
-  get errors(): string[] {
-    return stringArray(this.problem?.errors);
+  /** Validation errors from a 400 response, normalised to `{field, message}`. */
+  get errors(): FieldError[] {
+    const raw: unknown = this.problem?.errors;
+    if (!Array.isArray(raw)) return [];
+    return raw.flatMap((e): FieldError[] => {
+      if (typeof e === "string") return [{ field: null, message: e }];
+      if (typeof e === "object" && e !== null && typeof (e as FieldError).message === "string") {
+        const { field, message } = e as FieldError;
+        return [{ field: typeof field === "string" ? field : null, message }];
+      }
+      return [];
+    });
   }
 
   /** Suggested Ontario municipalities from a 422 response. */
