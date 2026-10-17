@@ -5,7 +5,9 @@ import com.reservationagent.hotelreservationagent.application.port.in.GetBooking
 import com.reservationagent.hotelreservationagent.application.port.in.GetBookingTaskUseCase.TaskSnapshot;
 import com.reservationagent.hotelreservationagent.application.port.in.SubmitBookingTaskUseCase;
 import com.reservationagent.hotelreservationagent.application.port.in.SubmitBookingTaskUseCase.Command;
+import com.reservationagent.hotelreservationagent.application.port.in.SubmitTaskPromptUseCase;
 import com.reservationagent.hotelreservationagent.application.port.in.SubscribeTaskProgressUseCase;
+import com.reservationagent.hotelreservationagent.application.port.out.TaskPromptInterpreter.InterpreterUnavailableException;
 import com.reservationagent.hotelreservationagent.application.service.validation.OutOfScopeLocationException;
 import com.reservationagent.hotelreservationagent.application.service.validation.RequestValidationException;
 import com.reservationagent.hotelreservationagent.domain.hotel.Hotel;
@@ -73,30 +75,43 @@ class TaskControllerTest {
     @MockitoBean
     private SubmitBookingTaskUseCase submit;
     @MockitoBean
+    private SubmitTaskPromptUseCase submitPrompt;
+    @MockitoBean
     private GetBookingTaskUseCase getTask;
     @MockitoBean
     private SubscribeTaskProgressUseCase progress;
 
     private static TaskSnapshot snapshot(BookingTask task) {
-        return new TaskSnapshot(task, "Ottawa", 0, 0, List.of(), null, null, Map.of());
+        return new TaskSnapshot(task, "Ottawa", 0, 0, List.of(), null, null, Map.of(), null, null);
     }
 
     private static BookingTask withStatus(BookingTask t, TaskStatus status, TaskOutcome outcome) {
         return new BookingTask(t.id(), t.requestId(), t.municipalityId(), t.stay(), t.destinationEmail(),
                 t.authorizationMode(), t.maximumTotal(), t.requiredAmenities(), t.allowCompetingQuoteDisclosure(),
-                t.deadline(), status, outcome, t.createdAt(), t.updatedAt());
+                t.intake(), t.deadline(), status, outcome, t.createdAt(), t.updatedAt());
     }
 
     /*
-     * The 400 `errors` entries are plain strings today and become {field, message} objects in the
-     * next backend change; these two helpers are the only places that know the shape.
+     * 400 `errors` entries are {field, message}; field is null for a request-level problem. These
+     * helpers are the only places that know the shape: expectations are written "field: message".
      */
+    private static List<String> errorTexts(MvcResult result) throws Exception {
+        List<String> texts = new java.util.ArrayList<>();
+        tools.jackson.databind.JsonNode errors = tools.jackson.databind.json.JsonMapper.builder().build()
+                .readTree(result.getResponse().getContentAsString()).path("errors");
+        for (tools.jackson.databind.JsonNode e : errors) {
+            String field = e.path("field").isNull() || e.path("field").isMissingNode() ? null : e.path("field").asString();
+            texts.add(field == null ? e.path("message").asString() : field + ": " + e.path("message").asString());
+        }
+        return texts;
+    }
+
     private static ResultMatcher errors(String... expected) {
-        return jsonPath("$.errors").value(org.hamcrest.Matchers.contains(expected));
+        return result -> assertThat(errorTexts(result)).containsExactly(expected);
     }
 
     private static ResultMatcher firstError(String expected) {
-        return jsonPath("$.errors[0]").value(expected);
+        return result -> assertThat(errorTexts(result)).first().isEqualTo(expected);
     }
 
     // ---------- POST /api/tasks ----------
@@ -238,16 +253,18 @@ class TaskControllerTest {
 
     @Test
     void businessRuleViolationsBecome400WithErrors() throws Exception {
-        when(submit.submit(any())).thenThrow(new RequestValidationException(
-                List.of("checkIn is in the past", "deadline must be in the future")));
+        when(submit.submit(any())).thenThrow(new RequestValidationException(List.of(
+                new RequestValidationException.FieldError("checkIn", "Check-in date is in the past"),
+                new RequestValidationException.FieldError(null, "Deadline must be in the future"))));
 
         mvc.perform(post("/api/tasks").contentType(MediaType.APPLICATION_JSON).content(VALID))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.title").value("Invalid request"))
-                .andExpect(jsonPath("$.detail").value("checkIn is in the past; deadline must be in the future"))
+                .andExpect(jsonPath("$.detail").value("checkIn: Check-in date is in the past; Deadline must be in the future"))
+                .andExpect(jsonPath("$.errors[1].field").value(nullValue()))
                 .andExpect(errors(
-                        "checkIn is in the past", "deadline must be in the future"));
+                        "checkIn: Check-in date is in the past", "Deadline must be in the future"));
     }
 
     @Test
@@ -282,6 +299,64 @@ class TaskControllerTest {
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.title").value("Ambiguous location"))
                 .andExpect(jsonPath("$.suggestions").value(org.hamcrest.Matchers.contains("Springwater", "Springfield")));
+    }
+
+    // ---------- POST /api/tasks/prompt ----------
+
+    @Test
+    void promptIsStrippedAndPassedWithTheIdempotencyKey() throws Exception {
+        BookingTask task = withStatus(task(), TaskStatus.VALIDATING, null);
+        when(submitPrompt.submit(any(), any())).thenReturn(task.id());
+        when(getTask.get(task.id())).thenReturn(Optional.of(snapshot(task)));
+
+        mvc.perform(post("/api/tasks/prompt").contentType(MediaType.APPLICATION_JSON)
+                        .header("Idempotency-Key", "chat-42")
+                        .content("{\"prompt\": \"  cheapest hotel in Ottawa tonight, a@example.com  \"}"))
+                .andExpect(status().isAccepted())
+                .andExpect(header().string("Location", "/api/tasks/" + task.id()))
+                .andExpect(jsonPath("$.taskId").value(task.id().toString()));
+
+        verify(submitPrompt).submit("cheapest hotel in Ottawa tonight, a@example.com", "chat-42");
+        verifyNoInteractions(submit);
+    }
+
+    @Test
+    void blankPromptIs400OnThePromptField() throws Exception {
+        mvc.perform(post("/api/tasks/prompt").contentType(MediaType.APPLICATION_JSON).content("{\"prompt\": \"  \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.errors[0].field").value("prompt"))
+                .andExpect(jsonPath("$.errors[0].message").value("Describe the stay you want, including your email address"));
+        verifyNoInteractions(submitPrompt);
+    }
+
+    @Test
+    void overlongPromptIs400() throws Exception {
+        mvc.perform(post("/api/tasks/prompt").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"prompt\": \"" + "x".repeat(2001) + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("prompt"));
+    }
+
+    @Test
+    void unavailableInterpreterIs503() throws Exception {
+        when(submitPrompt.submit(any(), any())).thenThrow(new InterpreterUnavailableException("OpenAI down", null));
+
+        mvc.perform(post("/api/tasks/prompt").contentType(MediaType.APPLICATION_JSON).content("{\"prompt\": \"Ottawa\"}"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Request reader unavailable"))
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("OpenAI"))));
+    }
+
+    @Test
+    void promptValidationErrorsKeepTheirFields() throws Exception {
+        when(submitPrompt.submit(any(), any())).thenThrow(new RequestValidationException(List.of(
+                new RequestValidationException.FieldError("email", "Include the email address the result should be sent to"))));
+
+        mvc.perform(post("/api/tasks/prompt").contentType(MediaType.APPLICATION_JSON).content("{\"prompt\": \"Ottawa\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(errors("email: Include the email address the result should be sent to"));
     }
 
     // ---------- GET /api/tasks/{id} ----------
@@ -338,7 +413,7 @@ class TaskControllerTest {
         Hotel hotel = hotel("Rideau Inn", PropertyType.HOTEL, 3, PriceTier.MIDSCALE, 0.9, "+16135550100");
         HotelOffer best = offer(task, hotel.id(), breakdown("300", "39", "12", "15"), NOW);
         when(getTask.get(task.id())).thenReturn(Optional.of(new TaskSnapshot(task, "Ottawa", 5, 2, List.of(best), best,
-                null, Map.of(hotel.id(), hotel))));
+                null, Map.of(hotel.id(), hotel), null, null)));
 
         mvc.perform(get("/api/tasks/{id}", task.id()))
                 .andExpect(status().isOk())

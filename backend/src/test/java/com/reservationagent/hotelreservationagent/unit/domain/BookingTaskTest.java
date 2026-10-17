@@ -4,6 +4,7 @@ import com.reservationagent.hotelreservationagent.domain.shared.DomainException;
 import com.reservationagent.hotelreservationagent.domain.task.AuthorizationMode;
 import com.reservationagent.hotelreservationagent.domain.task.BookingTask;
 import com.reservationagent.hotelreservationagent.domain.task.StayDetails;
+import com.reservationagent.hotelreservationagent.domain.task.TaskIntake;
 import com.reservationagent.hotelreservationagent.domain.task.TaskOutcome;
 import com.reservationagent.hotelreservationagent.domain.task.TaskStatus;
 import org.junit.jupiter.api.Test;
@@ -23,7 +24,7 @@ class BookingTaskTest {
 
     private static BookingTask received(AuthorizationMode mode, Set<String> amenities) {
         return new BookingTask(UUID.randomUUID(), "req-1", UUID.randomUUID(), new StayDetails(CHECK_IN, CHECK_OUT, 1, 2, 0),
-                "a@example.com", mode, null, amenities, false, NOW.plusSeconds(3600), TaskStatus.RECEIVED, null, NOW, NOW);
+                "a@example.com", mode, null, amenities, false, TaskIntake.FORM, NOW.plusSeconds(3600), TaskStatus.RECEIVED, null, NOW, NOW);
     }
 
     @Test
