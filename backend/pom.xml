@@ -134,6 +134,13 @@
             <version>1.5.1</version>
             <scope>test</scope>
         </dependency>
+        <!-- HTTP stubs for the Google Places, ElevenLabs and Resend clients (shaded: no Jetty clash) -->
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
+            <version>3.13.1</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
