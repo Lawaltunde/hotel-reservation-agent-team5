@@ -25,6 +25,7 @@ datasource. Flyway applies `src/main/resources/db/migration` on startup. Stop th
 | `POST /api/tasks/prompt` | Body `{"prompt": "..."}` (1-2000 chars). `202 {taskId, status}` + `Location`. Optional `Idempotency-Key` header. 400 / 422 as above, 503 if the AI provider is unavailable |
 | `GET /api/tasks/{id}` | Task status, outcome, `request` (see below), counts and offers (money: CAD numbers with 2 decimals, unknown = `null`). 404 if unknown |
 | `GET /api/tasks/{id}/events` | SSE, event `progress` `{taskId, status, message, at}`: current status on connect, then each change; completes on a terminal status |
+| `GET /api/recordings/{token}` | Call audio linked from the report email (proxied from ElevenLabs, not stored). 404 for an unknown or expired token, 502 if ElevenLabs fails |
 | `GET /api/municipalities?q=ott&limit=10` | `[{id, name, timeZone}]` (Ontario only) |
 | `POST /webhooks/elevenlabs`, `POST /webhooks/resend` | 200 accepted or duplicate, 401 bad/missing signature |
 
@@ -86,6 +87,10 @@ A variable that is present but empty falls back to the default below.
 | `app.cors.allowed-origins` | `http://localhost:3000` | Only needed when a browser calls the API cross-origin; the packaged UI is same-origin. |
 | `OPENAI_API_KEY` | `not-set` | The app starts without it; offer extraction then fails with a clear error and prompt intake returns 503. |
 | `app.intake.default-deadline` / `APP_INTAKE_DEFAULT_DEADLINE` | `PT30M` | Report deadline for a prompt-started task |
+| `app.report.team-number` / `APP_REPORT_TEAM_NUMBER` | `5` | In the subject "Team # 5 - Hotel Reservation Confirmed!", used only for a confirmed booking |
+| `app.report.recipient` / `REPORT_RECIPIENT` | empty | Copied (CC) on every report; the request's email is always the recipient |
+| `app.public-base-url` / `APP_PUBLIC_BASE_URL` | empty | Public URL of this backend. Without it the report says the recording link is unavailable |
+| `app.report.recording-link-ttl` / `APP_REPORT_RECORDING_LINK_TTL` | `P30D` | How long an emailed recording link works |
 | `OPENAI_CHAT_MODEL` | `gpt-5.4-mini` | Needs Structured Outputs (JSON schema). |
 | `OPENAI_REASONING_EFFORT` / `OPENAI_TEMPERATURE` | `none` / `0.1` | Sampling parameters are only accepted with reasoning effort `none`. |
 | `hotel-agent.{elevenlabs,google-places,resend}.enabled` | `false` | `false` uses logging / no-op stubs; set `ELEVENLABS_ENABLED`, `GOOGLE_PLACES_ENABLED`, `RESEND_ENABLED` to `true` to call the real APIs. |
