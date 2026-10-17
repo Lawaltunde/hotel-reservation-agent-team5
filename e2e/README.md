@@ -7,7 +7,8 @@ These tests drive the **packaged app**: one Spring Boot process that serves the 
 | Spec | What it covers | State |
 |---|---|---|
 | `tests/smoke.spec.ts` | Home page title, `GET /api/health` is UP, backend indicator says "online" | runs |
-| `tests/enquiry-flow.spec.ts` | Ottawa enquiry to `COMPLETED` (NO_CANDIDATES path, no "booked" wording); Vancouver → 422 in the UI and the API | `test.fixme` until the phase 2 backend and frontend PRs merge |
+| `tests/tasks-api.spec.ts` | API-level enquiry flow: an in-scope city (Ottawa) runs to `COMPLETED` / `NO_ELIGIBLE_HOTELS`; `requestId` idempotency; an out-of-scope city (`OUT_OF_SCOPE_CITY`, Seattle) → 422; past check-in → 400; SSE stream ends at `COMPLETED`; autocomplete | runs (needs a fresh database, see below) |
+| `tests/enquiry-flow.spec.ts` | UI enquiry flow on the search form | `test.fixme` until the chat UI (`POST /api/tasks/prompt`) lands |
 
 ## Run locally
 
@@ -33,8 +34,18 @@ PORT=$(docker compose -f backend/compose.yaml port postgres 5432 | cut -d: -f2)
 SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:$PORT/hotelagent \
 SPRING_DATASOURCE_USERNAME=hotelagent SPRING_DATASOURCE_PASSWORD=hotelagent \
 SPRING_DOCKER_COMPOSE_ENABLED=false \
+ELEVENLABS_ENABLED=false GOOGLE_PLACES_ENABLED=false RESEND_ENABLED=false \
+HOTEL_AGENT_ELEVENLABS_ENABLED=false HOTEL_AGENT_GOOGLEPLACES_ENABLED=false HOTEL_AGENT_RESEND_ENABLED=false \
 java -jar backend/target/hotel-reservation-agent-0.0.1-SNAPSHOT.jar
 ```
+
+The API specs expect an **empty hotel index**, so every in-scope search ends with
+`NO_ELIGIBLE_HOTELS`. Use a fresh database (CI's service container always is); with Compose,
+`docker compose -f backend/compose.yaml down -v` before starting. The provider flags above
+are set to `false` explicitly: `java -jar` from the repo root reads the root `.env`, and
+environment variables win over it, so a live-run `.env` cannot make the e2e run place calls,
+query Google or send email. (Backend tests are guarded separately by
+`ProviderSafetyEnvironmentPostProcessor` in `backend/src/test`.)
 
 ### 2. Run the tests (in another terminal)
 
