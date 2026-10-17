@@ -56,6 +56,15 @@ the result together with the call transcript.
   "cheapest" claims.
 - **Phone numbers are NANP** (`+1`), normalized to E.164.
 
+### Competition timing and tiebreaker
+
+- Competition timing ends when the result email arrives in the organizer's inbox.
+- If two teams finish at the same time, the hotel's distance from downtown of the
+  revealed city is the tiebreaker. This is not a maximum-radius restriction.
+- The organizer has not yet confirmed a numeric radius, the downtown
+  reference point, the measurement method, or which distance wins the tie. Do not
+  assume these details; obtain clarification before applying the tiebreaker.
+
 ### Required behaviour
 
 - Accept a frontend request with city, stay dates, room/guest counts, destination email,
@@ -668,7 +677,8 @@ Hotel Deal Agent
 Send long transcripts as an attachment or short-lived signed link. If consent for recording
 was not obtained, say the transcript was not captured — never fabricate it. Escape HTML.
 Track provider acceptance (a `200 OK` means *accepted*, not *delivered*) separately from
-delivery/bounce events. The task is not complete until the email is sent.
+delivery/bounce events. Competition timing ends only when the result email arrives in
+the organizer's inbox; sending or provider acceptance alone does not stop the clock.
 
 ---
 
