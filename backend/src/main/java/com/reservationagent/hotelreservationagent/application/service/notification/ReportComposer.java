@@ -205,6 +205,9 @@ public class ReportComposer {
             b.append("Hotel Name: ").append(hotel == null ? UNKNOWN : hotel.name()).append('\n');
             b.append("Hotel Address: ").append(hotel == null ? UNKNOWN : orUnknown(hotel.address())).append('\n');
             b.append("Hotel Phone (number called): ").append(chosen.get().call().dialledNumber().e164()).append('\n');
+            evaluator.distanceKm(offer).ifPresent(km -> b.append("Distance: ≈ ")
+                    .append(km < 10 ? String.format(java.util.Locale.ROOT, "%.1f", km) : String.valueOf(Math.round(km)))
+                    .append(" km from downtown\n"));
             b.append("Stay: ").append(stayText(stay)).append('\n');
             b.append("Price for the stay: ").append(priceText(price)).append('\n');
             b.append("Reservation #: ").append(reference(offer) == null ? NO_RESERVATION : reference(offer)).append('\n');
@@ -386,7 +389,7 @@ public class ReportComposer {
             return UNKNOWN;
         }
         if (price.estimated()) {
-            return "≈ " + price.amount() + " incl. HST; municipal accommodation tax not confirmed "
+            return "≈ " + price.amount() + " incl. estimated sales tax; accommodation levies not confirmed "
                     + "(availability confirmed, not booked)";
         }
         return price.amount().amount().toPlainString() + " CAD all-in, availability confirmed, not booked";

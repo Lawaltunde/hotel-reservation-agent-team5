@@ -113,9 +113,10 @@ public class BookingTaskService implements SubmitBookingTaskUseCase, GetBookingT
             Map<UUID, Hotel> offerHotels = new LinkedHashMap<>();
             taskOffers.stream().map(HotelOffer::hotelId).distinct()
                     .forEach(id -> hotelIndex.findById(id).ifPresent(h -> offerHotels.put(id, h)));
+            Optional<Municipality> municipality = municipalities.findById(task.municipalityId());
             return new TaskSnapshot(
                     task,
-                    municipalities.findById(task.municipalityId()).map(Municipality::name).orElse(null),
+                    municipality.map(Municipality::name).orElse(null),
                     candidates.countByTask(taskId),
                     calls.findByTask(taskId).size(),
                     taskOffers,
@@ -123,7 +124,8 @@ public class BookingTaskService implements SubmitBookingTaskUseCase, GetBookingT
                     reservations.findByTask(taskId).orElse(null),
                     offerHotels,
                     reports.findByTask(taskId).orElse(null),
-                    deliveries.findLatestByTask(taskId).orElse(null));
+                    deliveries.findLatestByTask(taskId).orElse(null),
+                    municipality.map(m -> m.provinceOrOntario().salesTaxRate()).orElse(null));
         });
     }
 }

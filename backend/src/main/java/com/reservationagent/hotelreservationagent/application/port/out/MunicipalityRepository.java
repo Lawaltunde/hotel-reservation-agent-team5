@@ -2,6 +2,7 @@ package com.reservationagent.hotelreservationagent.application.port.out;
 
 import com.reservationagent.hotelreservationagent.domain.geography.GeoPoint;
 import com.reservationagent.hotelreservationagent.domain.geography.Municipality;
+import com.reservationagent.hotelreservationagent.domain.geography.Province;
 
 import java.util.List;
 import java.util.Optional;
@@ -16,6 +17,6 @@ public interface MunicipalityRepository {
 
     Optional<Municipality> findById(UUID id);
 
-    /** Adds an Ontario municipality found by geocoding, or returns the existing one with that name. */
-    Municipality addGeocoded(String name, GeoPoint centre);
+    /** Adds a municipality found by geocoding, or returns the existing one with that name in that province. */
+    Municipality addGeocoded(String name, GeoPoint centre, Province province);
 }

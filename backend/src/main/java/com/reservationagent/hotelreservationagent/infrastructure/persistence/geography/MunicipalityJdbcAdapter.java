@@ -3,6 +3,7 @@ package com.reservationagent.hotelreservationagent.infrastructure.persistence.ge
 import com.reservationagent.hotelreservationagent.application.port.out.MunicipalityRepository;
 import com.reservationagent.hotelreservationagent.domain.geography.GeoPoint;
 import com.reservationagent.hotelreservationagent.domain.geography.Municipality;
+import com.reservationagent.hotelreservationagent.domain.geography.Province;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -20,7 +21,7 @@ class MunicipalityJdbcAdapter implements MunicipalityRepository {
 
     private static final String SELECT = """
             SELECT id, name, csd_code, alias_keys, ST_Y(centre::geometry) AS lat, ST_X(centre::geometry) AS lon,
-                   time_zone, mat_rate
+                   time_zone, mat_rate, province
             FROM municipalities
             """;
 
@@ -31,7 +32,8 @@ class MunicipalityJdbcAdapter implements MunicipalityRepository {
             toSet(rs.getArray("alias_keys")),
             new GeoPoint(rs.getDouble("lat"), rs.getDouble("lon")),
             ZoneId.of(rs.getString("time_zone")),
-            rs.getBigDecimal("mat_rate"));
+            rs.getBigDecimal("mat_rate"),
+            rs.getString("province"));
 
     private final JdbcClient jdbc;
 
@@ -62,20 +64,22 @@ class MunicipalityJdbcAdapter implements MunicipalityRepository {
     }
 
     @Override
-    public Municipality addGeocoded(String name, GeoPoint centre) {
-        List<Municipality> existing = findByNameOrAlias(name);
-        if (!existing.isEmpty()) {
-            return existing.getFirst();
+    public Municipality addGeocoded(String name, GeoPoint centre, Province province) {
+        Optional<Municipality> existing = findByNameOrAlias(name).stream()
+                .filter(m -> m.provinceOrOntario() == province).findFirst();
+        if (existing.isPresent()) {
+            return existing.get();
         }
         // North-western Ontario (Kenora district) is on Central time.
-        String zone = centre.longitude() < -90.0 ? "America/Winnipeg" : "America/Toronto";
+        String zone = province == Province.ON && centre.longitude() < -90.0 ? "America/Winnipeg" : province.zone().getId();
         UUID id = UUID.randomUUID();
         jdbc.sql("""
-                        INSERT INTO municipalities (id, name, name_key, alias_keys, centre, time_zone)
-                        VALUES (:id, :name, lower(unaccent(:name)), '{}', ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography, :zone)
+                        INSERT INTO municipalities (id, name, name_key, alias_keys, centre, time_zone, province)
+                        VALUES (:id, :name, lower(unaccent(:name)), '{}', ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography,
+                                :zone, :province)
                         """)
                 .param("id", id).param("name", name).param("lon", centre.longitude()).param("lat", centre.latitude())
-                .param("zone", zone)
+                .param("zone", zone).param("province", province.name())
                 .update();
         return findById(id).orElseThrow();
     }

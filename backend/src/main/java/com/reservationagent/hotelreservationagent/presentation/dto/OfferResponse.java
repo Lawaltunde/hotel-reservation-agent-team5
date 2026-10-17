@@ -51,6 +51,11 @@ public record OfferResponse(
 ) {
 
     public static OfferResponse from(HotelOffer offer, Hotel hotel) {
+        return from(offer, hotel, PriceBreakdown.ONTARIO_HST_RATE);
+    }
+
+    /** @param salesTaxRate the destination province's sales tax on accommodation, for an estimated price */
+    public static OfferResponse from(HotelOffer offer, Hotel hotel, java.math.BigDecimal salesTaxRate) {
         PriceBreakdown p = offer.negotiated();
         return new OfferResponse(
                 offer.id(),
@@ -69,9 +74,9 @@ public record OfferResponse(
                 amount(p.allInTotal()),
                 p.taxInclusion(),
                 p.totalsDisagree(),
-                p.price().map(x -> x.amount().amount()).orElse(null),
-                p.price().map(OfferPrice::estimated).orElse(false),
-                p.price().map(OfferPrice::basis).orElse(null),
+                p.price(salesTaxRate).map(x -> x.amount().amount()).orElse(null),
+                p.price(salesTaxRate).map(OfferPrice::estimated).orElse(false),
+                p.price(salesTaxRate).map(OfferPrice::basis).orElse(null),
                 offer.cancellationTerms(),
                 offer.depositTerms(),
                 offer.enquiryId(),

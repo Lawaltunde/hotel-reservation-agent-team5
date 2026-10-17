@@ -39,7 +39,7 @@ class BookingRequestValidatorTest {
     private static final LocalDate TODAY = LocalDate.now(CLOCK);
 
     private final MunicipalityRepository municipalities = mock(MunicipalityRepository.class);
-    private final BookingRequestValidator validator = new BookingRequestValidator(municipalities, name -> Optional.empty(), CLOCK);
+    private final BookingRequestValidator validator = new BookingRequestValidator(municipalities, (name, hint) -> Optional.empty(), CLOCK);
 
     @BeforeEach
     void ottawaExists() {
@@ -164,6 +164,6 @@ class BookingRequestValidatorTest {
         assertThatExceptionOfType(OutOfScopeLocationException.class)
                 .isThrownBy(() -> validator.validate(ambiguous))
                 .withMessageContaining("matches several")
-                .satisfies(e -> assertThat(e.suggestions()).containsExactly("Springwater", "Springfield"));
+                .satisfies(e -> assertThat(e.suggestions()).containsExactly("Springwater, ON", "Springfield, ON"));
     }
 }

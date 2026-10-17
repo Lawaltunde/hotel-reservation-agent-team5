@@ -218,7 +218,7 @@ public class TaskController {
             case EMAIL_PENDING -> "Sending the report email";
             case COMPLETED -> "Report email sent";
             case INVALID_REQUEST -> "The request could not be used";
-            case OUT_OF_SCOPE_LOCATION -> "The location is outside Ontario";
+            case OUT_OF_SCOPE_LOCATION -> "The location could not be found in Canada";
             case NO_CANDIDATES -> "No callable hotels found";
             case NO_VALID_OFFER -> "No confirmed available offer";
             case BOOKING_UNCERTAIN -> "Booking status uncertain";
