@@ -1,4 +1,4 @@
-import type { TaskOutcome, TaskStatus, TaxInclusion } from "@/models/task";
+import type { Offer, TaskOutcome, TaskStatus, TaxInclusion } from "@/models/task";
 
 /** Placeholder for any value the backend reported as unknown (`null`). Never shown as 0. */
 export const UNKNOWN = "Unknown";
@@ -41,6 +41,19 @@ export function formatInstant(iso: string | null | undefined): string {
     minute: "2-digit",
     timeZoneName: "short",
   }).format(date);
+}
+
+/**
+ * How long a quote holds, as `Valid until <time> (hotel said: "<text>")`, or `null` when the
+ * hotel gave nothing usable. Either half may be missing; the hotel's words are never paraphrased.
+ */
+export function formatQuoteValidity(offer: Pick<Offer, "quoteValidUntil" | "quoteValidityText">): string | null {
+  const until = offer.quoteValidUntil ? formatInstant(offer.quoteValidUntil) : null;
+  const said = offer.quoteValidityText?.trim() || null;
+  if (until && said) return `Valid until ${until} (hotel said: "${said}")`;
+  if (until) return `Valid until ${until}`;
+  if (said) return `Hotel said: "${said}"`;
+  return null;
 }
 
 /** Time of day only, for the progress log. */

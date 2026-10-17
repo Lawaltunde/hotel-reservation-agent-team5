@@ -130,18 +130,32 @@ export interface Offer {
   hotelAddress: string | null;
   roomType: string | null;
   initialQuotedTotal: number | null;
+  /** Room charge for the whole stay before taxes and fees. Optional until the backend sends it. */
+  roomSubtotal?: number | null;
+  /**
+   * The comparable all-in total (room + HST + MAT + mandatory fees) used to rank offers.
+   * `null` when it cannot be established; such an offer is never called cheapest.
+   */
   negotiatedTotal: number | null;
+  /** The all-in total as the hotel stated it on the call. Optional until the backend sends it. */
+  allInTotal?: number | null;
+  /** True when the summed components and the stated all-in total differ by more than CA$1. */
+  totalsDisagree?: boolean | null;
   currency: "CAD" | (string & {});
   hst: number | null;
   municipalAccommodationTax: number | null;
   mandatoryFees: number | null;
+  /** Removable charges; never part of `negotiatedTotal`. Optional until the backend sends it. */
+  optionalFees?: number | null;
   taxInclusion: TaxInclusion | null;
   cancellationTerms: string | null;
   depositTerms: string | null;
   /** The hotel's enquiry/quote reference. This is NOT a booking confirmation. */
   enquiryId: string | null;
-  /** ISO-8601 instant. */
+  /** ISO-8601 instant: call end plus the period the hotel stated; `null` when no period was given. */
   quoteValidUntil: string | null;
+  /** The hotel's own words about how long the quote holds, verbatim from the call. */
+  quoteValidityText?: string | null;
   evidenceStatus: string | null;
 }
 
