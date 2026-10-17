@@ -64,14 +64,16 @@ test.describe("chat intake", () => {
     await expect(page).not.toHaveURL(/[?&]task=/);
   });
 
-  test("a city outside Ontario gets an answer, not a task", async ({ page }) => {
+  test("an out-of-scope city gets an answer, not a task", async ({ page }) => {
     await page.goto("/");
 
     const rejected = page.waitForResponse((r) => r.url().endsWith("/api/tasks/prompt") && r.request().method() === "POST");
+    // Vancouver is out of scope for the backend under test; CI's stub interpreter only knows seeded names.
+    // TODO(test agent): switch to a non-Canadian city the stub knows once the backend goes Canada-wide.
     await say(page, `hotel in Vancouver tomorrow for 2 nights, ${EMAIL}`);
     expect((await rejected).status()).toBe(422);
 
-    await expect(page.getByText(/I can only search hotels in Ontario\..*Which Ontario city should I search\?/)).toBeVisible();
+    await expect(page.getByText(/I can only search hotels in Canada\..*Which Canadian city should I search\?/)).toBeVisible();
     await expect(page).not.toHaveURL(/[?&]task=/);
     await expect(composer(page)).toBeEnabled();
   });

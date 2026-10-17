@@ -117,7 +117,7 @@ export interface Offer {
   /** Room charge for the whole stay before taxes and fees. Optional until the backend sends it. */
   roomSubtotal?: number | null;
   /**
-   * The comparable all-in total (room + HST + MAT + mandatory fees) used to rank offers.
+   * The comparable all-in total (room + sales taxes + levies + mandatory fees) used to rank offers.
    * `null` when it cannot be established; such an offer is never called cheapest.
    */
   negotiatedTotal: number | null;
@@ -126,13 +126,13 @@ export interface Offer {
   /** True when the summed components and the stated all-in total differ by more than CA$1. */
   totalsDisagree?: boolean | null;
   currency: "CAD" | (string & {});
-  /** Sales tax for the stay (HST in Ontario). The backend may send this or `hst`. */
+  /** Sales tax for the stay (GST/PST/QST/HST by province). The backend may send this or `hst`. */
   salesTax?: number | null;
-  /** The backend's name for the sales tax, e.g. "HST 13%"; "HST" when absent. */
+  /** The backend's name for the sales tax, e.g. "GST 5% + QST 9.975%"; "Sales tax" when absent. */
   salesTaxLabel?: string | null;
-  /** Accommodation levy for the stay (MAT in Ontario). The backend may send this or `municipalAccommodationTax`. */
+  /** Accommodation levies for the stay. The backend may send this or `municipalAccommodationTax`. */
   accommodationLevy?: number | null;
-  /** e.g. "Municipal accommodation tax 4%"; "Municipal accommodation tax" when absent. */
+  /** e.g. "Municipal accommodation tax 4%"; "Accommodation levy" when absent. */
   levyLabel?: string | null;
   hst?: number | null;
   municipalAccommodationTax?: number | null;
@@ -144,7 +144,7 @@ export interface Offer {
   depositTerms: string | null;
   /** The price offers are ranked by: the all-in total, or an estimate when `estimated` is true. */
   price?: number | null;
-  /** True when `price` is an estimate (HST added to a pre-tax rate), not a figure the hotel stated. */
+  /** True when `price` is an estimate (sales tax added to a pre-tax rate), not a figure the hotel stated. */
   estimated?: boolean | null;
   priceBasis?: "SUM_OF_STATED_PARTS" | "STATED_ALL_IN" | "ESTIMATED_HST" | (string & {}) | null;
   /** The hotel's enquiry/quote reference. This is NOT a booking confirmation. */
@@ -162,6 +162,10 @@ export interface Offer {
  */
 export interface TaskRequest {
   city: string | null;
+  /** Two-letter province or territory code, e.g. `NS`, `QC`. */
+  province?: string | null;
+  /** e.g. "Nova Scotia". Preferred over `province` for display. */
+  provinceName?: string | null;
   /** `YYYY-MM-DD`, hotel local date; null when the user didn't say. */
   checkIn: string | null;
   checkOut: string | null;
