@@ -6,3 +6,5 @@ next-env.d.ts
 *.tsbuildinfo
 npm-debug.log*
 .env*.local
+node/
+target/

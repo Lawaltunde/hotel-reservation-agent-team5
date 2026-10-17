@@ -1,8 +1,7 @@
 services:
   postgres:
-    # Official PostGIS image is published for amd64 only; it runs under emulation on Apple Silicon.
-    image: 'postgis/postgis:17-3.5'
-    platform: linux/amd64
+    # Multi-arch (amd64 + arm64) PostGIS build; same image as the Testcontainers setup.
+    image: 'imresamu/postgis:17-3.5'
     environment:
       - 'POSTGRES_DB=hotelagent'
       - 'POSTGRES_USER=hotelagent'
