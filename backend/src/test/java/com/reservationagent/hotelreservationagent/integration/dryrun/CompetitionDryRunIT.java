@@ -25,13 +25,11 @@ import tools.jackson.databind.json.JsonMapper;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -41,6 +39,8 @@ import java.util.function.BooleanSupplier;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.containing;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
 import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
@@ -53,20 +53,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Competition dry run: the whole agent, end to end, with every paid provider replaced by WireMock.
  * <ol>
- *   <li>A messy one-shot prompt goes to {@code POST /api/tasks/prompt} (falls back to the structured
- *       {@code POST /api/tasks} while the prompt endpoint is not merged).</li>
- *   <li>Google Places returns four Ottawa hotels with phones; ElevenLabs accepts every outbound call.</li>
- *   <li>The test then plays ElevenLabs: it posts a signed {@code post_call_transcription} webhook per
- *       call. Two hotels quote, one is sold out, one is voicemail. OpenAI (offer extraction) is a
- *       WireMock stub keyed on each transcript.</li>
- *   <li>Resend captures the email. Exactly one is sent, and it names the cheapest hotel that
- *       confirmed availability, with its address, phone, dates, all-in total and transcript.</li>
+ *   <li>A messy one-shot prompt goes to {@code POST /api/tasks/prompt}. OpenAI is a WireMock stub: it
+ *       returns the structured reading of the prompt, and later the offer extracted from each call.</li>
+ *   <li>Google Places Text Search ("hotels in Ottawa, Ontario") returns four Ottawa hotels with phones;
+ *       ElevenLabs accepts every outbound call.</li>
+ *   <li>The test then plays ElevenLabs: as each call starts it posts a signed
+ *       {@code post_call_transcription} webhook. Two hotels quote, one is sold out, one is voicemail.
+ *       Calls run with the production concurrency and the finish-fast rule, so not every hotel need
+ *       be called; the expected winner is computed from the hotels that were.</li>
+ *   <li>Resend captures the email. Exactly one is sent, in the organizer's format: the cheapest hotel
+ *       that confirmed availability, its address, the number called, the dates and the total, then
+ *       the recording and conversation links and the transcripts. The same report is on
+ *       {@code GET /api/tasks/{id}}, and its recording link serves the ElevenLabs audio.</li>
  * </ol>
+ * Besides the full request, a prompt with no dates (tonight, one night, stated as an assumption) and
+ * one with no email address (sent to the organizer inbox) run the same way.
  * The cheapest hotel is deliberately not the one with the cheapest room rate, and the sold-out
  * hotel mentions the lowest price of all, so the test fails if either is picked.
  *
- * <p>Contracts still moving (prompt endpoint, Places discovery, report shape, email links) are
- * isolated in the constants and the {@code PENDING_*} switches below.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureRestTestClient
@@ -79,6 +83,9 @@ class CompetitionDryRunIT {
 
     private static final String WEBHOOK_SECRET = "wsec_dry_run_secret";
     private static final String RECIPIENT = "dryrun.traveller@example.com";
+    /** REPORT_RECIPIENT: copied on every report, and the recipient when the prompt has no address. */
+    private static final String ORGANIZER = "organizer.dryrun@example.com";
+    private static final LocalDate TODAY = LocalDate.now(TORONTO);
     private static final LocalDate CHECK_IN = LocalDate.now(TORONTO).plusDays(1);
     private static final LocalDate CHECK_OUT = CHECK_IN.plusDays(2);
     private static final String PROMPT = ("hey!! need the cheapest hotel in ottawa ON tmrw for 2 nights, me + my wife "
@@ -88,10 +95,8 @@ class CompetitionDryRunIT {
     /** Everything after submission (calls, webhooks, extraction, email) must finish within this. */
     private static final Duration ELAPSED_BUDGET = Duration.ofSeconds(60);
 
-    /** Flip when the backend merges each piece (see the class comment). */
-    private static final boolean PENDING_EMAIL_LINKS = true;
-    /** While Places discovery is not merged, the hotels must also be in the local index. */
-    private static final boolean SEED_HOTEL_INDEX = true;
+    private static final String PUBLIC_BASE_URL = "https://dryrun.example.test";
+    private static final byte[] AUDIO = "ID3 dry-run audio".getBytes(StandardCharsets.US_ASCII);
 
     static final WireMockServer providers = new WireMockServer(wireMockConfig().dynamicPort());
 
@@ -210,8 +215,34 @@ class CompetitionDryRunIT {
     }
 
     static final List<ScenarioHotel> HOTELS = List.of(RIDEAU, BYWARD, GLEBE, PARLIAMENT);
-    static final ScenarioHotel CHEAPEST_AVAILABLE = BYWARD;
-    static final String CHEAPEST_TOTAL = "247.83";
+
+    // ---------- the requests ----------
+
+    /** One prompt and what the agent must make of it. */
+    record Request(String name, String prompt, String promptMarker, Map<String, Object> interpretation,
+                   LocalDate checkIn, LocalDate checkOut, String to, List<String> cc, List<String> assumptions) {
+    }
+
+    /** The main case: tomorrow, 2 nights, 2 adults, a nightly budget, an email address. */
+    static final Request FULL = new Request("full", PROMPT, "cheapest hotel in ottawa", promptParse(),
+            CHECK_IN, CHECK_OUT, RECIPIENT, List.of(ORGANIZER), List.of());
+
+    /** No dates at all: tonight for one night, and the email says so. */
+    static final Request NO_DATES = new Request("no dates",
+            "any cheap hotel in ottawa for 2 adults pls, results to " + RECIPIENT,
+            "any cheap hotel in ottawa", interpretation(null, null, 2, null),
+            TODAY, TODAY.plusDays(1), RECIPIENT, List.of(ORGANIZER),
+            List.of("No dates given: asking hotels for tonight (" + TODAY + ")",
+                    "No check-out or length of stay given: asking for 1 night"));
+
+    /** No email address: the report goes to the organizer inbox, and the email says so. */
+    static final Request NO_EMAIL = new Request("no email",
+            "cheapest hotel ottawa tomorrow 2 nights 2 adults, no email sorry",
+            "cheapest hotel ottawa tomorrow", interpretation("TOMORROW", 2, 2, null),
+            CHECK_IN, CHECK_OUT, ORGANIZER, List.of(),
+            List.of("No email address given: sending the report to the organizer inbox"));
+
+    static final List<Request> REQUESTS = List.of(FULL, NO_DATES, NO_EMAIL);
 
     // ---------- wiring ----------
 
@@ -244,7 +275,8 @@ class CompetitionDryRunIT {
         r.add("hotel-agent.resend.base-url", () -> base);
         r.add("hotel-agent.resend.api-key", () -> "re_dry_run");
         r.add("hotel-agent.resend.from", () -> "Hotel Deal Agent <agent@example.com>");
-        r.add("hotel-agent.policy.max-parallel-calls", () -> "4");
+        r.add("app.public-base-url", () -> PUBLIC_BASE_URL);
+        r.add("app.report.recipient", () -> ORGANIZER);
         r.add("spring.ai.openai.base-url", () -> base + "/v1");
         r.add("spring.ai.openai.api-key", () -> "sk-dry-run");
         r.add("spring.ai.openai.chat.max-retries", () -> "0");
@@ -273,26 +305,22 @@ class CompetitionDryRunIT {
                          "callSid": "CA{{randomValue length=32 type='HEXADECIMAL'}}"}
                         """).withTransformers("response-template")));
 
-        // OpenAI: offer extraction, keyed on the hotel named in the transcript.
-        for (ScenarioHotel h : HOTELS) {
-            providers.stubFor(post(urlPathMatching(".*/chat/completions")).atPriority(1)
-                    .withRequestBody(containing(h.name()))
-                    .willReturn(okJson(chatCompletion(JSON.writeValueAsString(h.extracted())))));
+        // OpenAI: reading each prompt (POST /api/tasks/prompt). Offer extraction is stubbed per run.
+        for (Request r : REQUESTS) {
+            providers.stubFor(post(urlPathMatching(".*/chat/completions")).atPriority(2)
+                    .withRequestBody(containing(r.promptMarker()))
+                    .willReturn(okJson(chatCompletion(JSON.writeValueAsString(r.interpretation())))));
         }
-        // OpenAI: prompt parsing (POST /api/tasks/prompt), in TaskPromptInterpreter.InterpretedPrompt's schema.
-        providers.stubFor(post(urlPathMatching(".*/chat/completions")).atPriority(2)
-                .withRequestBody(containing("cheapest hotel in ottawa"))
-                .willReturn(okJson(chatCompletion(JSON.writeValueAsString(promptInterpretation())))));
         providers.stubFor(post(urlPathMatching(".*")).atPriority(100)
                 .willReturn(aResponse().withStatus(599).withBody("dry run: no stub for this request")));
+
+        // ElevenLabs: call audio behind the report's recording link.
+        providers.stubFor(get(urlPathMatching("/v1/convai/conversations/.+/audio"))
+                .willReturn(aResponse().withHeader("Content-Type", "audio/mpeg").withBody(AUDIO)));
 
         // Resend: accept and capture.
         providers.stubFor(post(urlEqualTo("/emails")).willReturn(okJson("{\"id\":\"{{randomValue type='UUID'}}\"}")
                 .withTransformers("response-template")));
-
-        if (SEED_HOTEL_INDEX) {
-            seedHotelIndex();
-        }
     }
 
     private static Map<String, Object> place(ScenarioHotel h) {
@@ -313,34 +341,48 @@ class CompetitionDryRunIT {
         return p;
     }
 
-    /** Best guess at the prompt parser's output; kept in one place until the contract is final. */
-    /** What the interpreter model returns for PROMPT: dates as expressions, budget with its unit. */
-    private static Map<String, Object> promptInterpretation() {
+    /** The model's reading of {@link #PROMPT}: labels only, dates unresolved, email redacted. */
+    private static Map<String, Object> promptParse() {
+        return interpretation("TOMORROW", 2, 2, Map.of("amount", 180, "unit", "PER_NIGHT"));
+    }
+
+    /** An InterpretedPrompt for Ottawa, 1 room; every other field null (unstated). */
+    private static Map<String, Object> interpretation(String checkInKind, Integer nights, Integer adults,
+                                                      Map<String, Object> budget) {
+        Map<String, Object> checkIn = null;
+        if (checkInKind != null) {
+            checkIn = new LinkedHashMap<>();
+            for (String k : List.of("kind", "year", "month", "day", "weekday", "days")) {
+                checkIn.put(k, null);
+            }
+            checkIn.put("kind", checkInKind);
+        }
         Map<String, Object> p = new LinkedHashMap<>();
-        p.put("city", "Ottawa");
-        p.put("checkIn", Map.of("kind", "TOMORROW"));
+        p.put("city", "ottawa");
+        p.put("checkIn", checkIn);
         p.put("checkOut", null);
-        p.put("nights", 2);
+        p.put("nights", nights);
         p.put("rooms", 1);
-        p.put("adults", 2);
+        p.put("adults", adults);
         p.put("children", null);
-        p.put("budget", Map.of("amount", 180, "unit", "PER_NIGHT"));
+        p.put("budget", budget);
         p.put("amenities", List.of());
         p.put("notes", null);
         return p;
     }
 
-    private static Map<String, Object> promptParse() {
-        Map<String, Object> p = new LinkedHashMap<>();
-        p.put("city", "Ottawa");
-        p.put("checkIn", CHECK_IN.toString());
-        p.put("checkOut", CHECK_OUT.toString());
-        p.put("rooms", 1);
-        p.put("adults", 2);
-        p.put("children", 0);
-        p.put("maxNightlyBudgetCad", 180);
-        p.put("authorizationMode", "ENQUIRY_ONLY");
-        return p;
+    /** Offer extraction keyed on the hotel named in the transcript, quoting the dates the agent asked for. */
+    private void stubExtraction(Request r) throws Exception {
+        for (ScenarioHotel h : HOTELS) {
+            Map<String, Object> extracted = new LinkedHashMap<>(h.extracted());
+            if (extracted.get("checkIn") != null) {
+                extracted.put("checkIn", r.checkIn().toString());
+                extracted.put("checkOut", r.checkOut().toString());
+            }
+            providers.stubFor(post(urlPathMatching(".*/chat/completions")).atPriority(1)
+                    .withRequestBody(containing(h.name()))
+                    .willReturn(okJson(chatCompletion(JSON.writeValueAsString(extracted)))));
+        }
     }
 
     private static String chatCompletion(String content) throws Exception {
@@ -356,137 +398,190 @@ class CompetitionDryRunIT {
                 "usage", Map.of("prompt_tokens", 400, "completion_tokens", 120, "total_tokens", 520)));
     }
 
-    private void seedHotelIndex() {
-        UUID ottawa = jdbc.sql("SELECT id FROM municipalities WHERE name = 'Ottawa'").query(UUID.class).single();
-        for (ScenarioHotel h : HOTELS) {
-            jdbc.sql("""
-                            INSERT INTO hotels (id, canonical_key, name, address, municipality_id, location, property_type,
-                                stars, price_tier, phones, phone_confidence, operational, last_seen_at)
-                            VALUES (:id, :key, :name, :address, :municipality, ST_MakePoint(:lon, :lat)::geography, 'HOTEL',
-                                :stars, 'UNKNOWN', ARRAY[:phone], 0.9, true, :now)
-                            ON CONFLICT (canonical_key) DO NOTHING
-                            """)
-                    .param("id", UUID.randomUUID()).param("key", "dryrun:" + h.phone()).param("name", h.name())
-                    .param("address", h.address()).param("municipality", ottawa).param("lon", h.lon())
-                    .param("lat", h.lat()).param("stars", h.stars()).param("phone", h.phone())
-                    .param("now", Timestamp.from(Instant.now())).update();
-        }
-    }
-
     // ---------- the run ----------
 
     @Test
     void oneEmailWithTheCheapestConfirmedAvailableHotel() throws Exception {
-        run(false);
+        run(FULL, false);
     }
 
     /** ElevenLabs posts webhooks in parallel and retries them; still exactly one email. */
     @Test
     void concurrentAndRedeliveredWebhooksStillSendOneEmail() throws Exception {
-        run(true);
+        run(FULL, true);
     }
 
-    private void run(boolean concurrentWithRedelivery) throws Exception {
+    @Test
+    void aPromptWithNoDatesAsksForTonightForOneNightAndSaysSo() throws Exception {
+        run(NO_DATES, false);
+    }
+
+    @Test
+    void aPromptWithNoEmailIsReportedToTheOrganizerInbox() throws Exception {
+        run(NO_EMAIL, false);
+    }
+
+    private void run(Request request, boolean concurrentWithRedelivery) throws Exception {
+        stubExtraction(request);
         Instant submitted = Instant.now();
-        String taskId = submit();
-        log.info("dry run: task {} submitted", taskId);
+        String taskId = submit(request.prompt());
+        log.info("dry run [{}]: task {} submitted", request.name(), taskId);
 
-        // Every hotel is dialled once; wait until each call has its conversation id.
-        await("4 outbound calls", Duration.ofSeconds(30), () -> conversationIds(taskId).size() == HOTELS.size());
-        Map<String, String> conversations = conversationIds(taskId);
-        assertThat(conversations.keySet()).containsExactlyInAnyOrderElementsOf(HOTELS.stream().map(ScenarioHotel::phone).toList());
-        assertThat(providers.findAll(postRequestedFor(urlEqualTo("/v1/convai/twilio/outbound-call")))).hasSize(HOTELS.size());
-        Instant callsStarted = Instant.now();
-
-        if (concurrentWithRedelivery) {
-            List<ScenarioHotel> deliveries = new ArrayList<>(HOTELS);
-            deliveries.addAll(HOTELS); // every webhook delivered twice
-            try (var pool = java.util.concurrent.Executors.newFixedThreadPool(deliveries.size())) {
-                List<java.util.concurrent.Future<?>> posted = new ArrayList<>();
-                for (ScenarioHotel h : deliveries) {
-                    posted.add(pool.submit(() -> {
-                        postCallWebhook(conversations.get(h.phone()), h);
-                        return null;
-                    }));
-                }
-                for (var f : posted) {
-                    f.get(60, java.util.concurrent.TimeUnit.SECONDS);
-                }
-            }
-        } else {
-            for (ScenarioHotel h : HOTELS) {
-                postCallWebhook(conversations.get(h.phone()), h);
-            }
+        // The email address never reaches the model.
+        LoggedRequest interpretation = providers.findAll(postRequestedFor(urlPathMatching(".*/chat/completions"))
+                .withRequestBody(containing(request.promptMarker()))).getFirst();
+        assertThat(interpretation.getBodyAsString()).doesNotContain(RECIPIENT);
+        if (request.prompt().contains(RECIPIENT)) {
+            assertThat(interpretation.getBodyAsString()).contains("<email>");
         }
 
-        await("report email", ELAPSED_BUDGET, () -> !emailsFor(taskId).isEmpty());
+        // Play ElevenLabs: answer every call as it starts, until the report goes out.
+        Map<String, String> answered = new LinkedHashMap<>();
+        Instant firstCall = null;
+        Instant giveUp = submitted.plus(ELAPSED_BUDGET);
+        while (emailsFor(taskId).isEmpty()) {
+            Map<String, String> started = conversationIds(taskId);
+            started.keySet().removeAll(answered.keySet());
+            if (!started.isEmpty() && firstCall == null) {
+                firstCall = Instant.now();
+            }
+            List<ScenarioHotel> batch = started.keySet().stream().map(CompetitionDryRunIT::byPhone).toList();
+            answer(started, batch, concurrentWithRedelivery);
+            answered.putAll(started);
+            if (Instant.now().isAfter(giveUp)) {
+                await("report email", Duration.ZERO, () -> !emailsFor(taskId).isEmpty());
+            }
+            Thread.sleep(50);
+        }
         Instant emailed = Instant.now();
         Thread.sleep(1500); // a second email would arrive right behind the first
         List<LoggedRequest> sent = emailsFor(taskId);
         assertThat(sent).as("exactly one report email").hasSize(1);
 
         Duration total = Duration.between(submitted, emailed);
-        log.info("dry run: submit -> calls started {} ms, calls -> email {} ms, total {} ms",
-                Duration.between(submitted, callsStarted).toMillis(), Duration.between(callsStarted, emailed).toMillis(),
+        log.info("dry run: {} hotel(s) called; submit -> first call {} ms, total to email {} ms",
+                answered.size(), firstCall == null ? -1 : Duration.between(submitted, firstCall).toMillis(),
                 total.toMillis());
         assertThat(total).isLessThan(ELAPSED_BUDGET);
 
+        List<ScenarioHotel> called = answered.keySet().stream().map(CompetitionDryRunIT::byPhone).toList();
+        assertThat(called).as("each hotel is dialled at most once").doesNotHaveDuplicates();
+        ScenarioHotel winner = called.stream().filter(h -> h.result() == Result.QUOTE)
+                .min(java.util.Comparator.comparing(CompetitionDryRunIT::allInTotal))
+                .orElseThrow(() -> new AssertionError("no quoting hotel was called: " + called));
+        String winnerTotal = allInTotal(winner).toPlainString();
+        String winnerConversation = answered.get(winner.phone());
+
         JsonNode email = JSON.readTree(sent.getFirst().getBodyAsString());
         String text = email.path("text").asString("") + "\n" + email.path("html").asString("");
-        String attachments = decodedAttachments(email);
         log.info("dry run email:\n{}", text);
 
-        assertThat(email.path("to").toString()).contains(RECIPIENT);
-        assertThat(text).contains(CHEAPEST_AVAILABLE.name(), CHEAPEST_AVAILABLE.address(), CHEAPEST_TOTAL)
-                .contains(CHECK_IN.toString(), CHECK_OUT.toString());
-        assertThat(text.contains(CHEAPEST_AVAILABLE.phone()) || text.contains("613-555-0122")
-                || text.contains("(613) 555-0122")).as("winner's phone number in the email").isTrue();
-        // The winner comes first; the cheaper-room and sold-out hotels never head the report.
-        int winnerAt = text.indexOf(CHEAPEST_AVAILABLE.name());
-        for (ScenarioHotel other : List.of(RIDEAU, GLEBE, PARLIAMENT)) {
-            int at = text.indexOf(other.name());
-            assertThat(at == -1 || at > winnerAt).as("%s mentioned before the winner", other.name()).isTrue();
+        assertThat(email.path("to").toString()).contains(request.to());
+        List<String> cc = new ArrayList<>();
+        email.path("cc").forEach(a -> cc.add(a.asString()));
+        assertThat(cc).as("cc").containsExactlyElementsOf(request.cc());
+        long nights = java.time.temporal.ChronoUnit.DAYS.between(request.checkIn(), request.checkOut());
+        // A confirmed-available option gets the organizer's subject (the report itself says nothing was booked).
+        assertThat(email.path("subject").asString()).isEqualTo("Team # 5 - Hotel Reservation Confirmed!");
+        assertThat(text).contains(
+                "Hotel Name: " + winner.name(),
+                "Hotel Address: " + winner.address(),
+                "Hotel Phone (number called): " + winner.phone(),
+                request.checkIn() + " to " + request.checkOut() + " (" + nights + " night" + (nights == 1 ? "" : "s") + ")",
+                "Price for the stay: " + winnerTotal + " CAD all-in, availability confirmed, not booked",
+                "Reservation #: " + winner.extracted().get("enquiryId"));
+        // The cheaper-room, sold-out and voicemail hotels may be listed, never chosen.
+        for (ScenarioHotel other : HOTELS) {
+            if (other != winner) {
+                assertThat(text).doesNotContain("Hotel Name: " + other.name());
+            }
         }
+        assertThat(text).containsPattern("Call recording: " + java.util.regex.Pattern.quote(PUBLIC_BASE_URL) + "/\\S+")
+                .contains("Conversation: https://elevenlabs.io/app/conversational-ai/history/" + winnerConversation)
+                .contains("=== " + winner.name(), winner.transcript().get(5)[1])
+                .containsPattern("Tokens spent: [1-9]\\d*");
         assertThat(text).doesNotContainIgnoringCase("reservation confirmed").doesNotContain("Booking confirmed");
-        assertThat(text + attachments).as("the winner's call transcript")
-                .contains("I can bring it to 199 for the two nights");
-        if (!PENDING_EMAIL_LINKS) {
-            assertThat(text).containsPattern("https?://\\S+");
-        }
 
         JsonNode task = JSON.readTree(client.get().uri("/api/tasks/{id}", taskId).exchange()
                 .expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody());
         assertThat(task.path("status").asString()).isEqualTo("COMPLETED");
         assertThat(task.path("outcome").asString()).isIn("ENQUIRY_COMPLETED", "QUOTE_RECEIVED");
-        assertThat(task.path("bestOffer").path("hotelName").asString()).isEqualTo(CHEAPEST_AVAILABLE.name());
-        assertThat(task.path("bestOffer").path("negotiatedTotal").decimalValue()).isEqualByComparingTo(CHEAPEST_TOTAL);
-        assertThat(task.path("offers").size()).as("offers from the two available hotels").isEqualTo(2);
-        if (task.has("report") && !task.path("report").isNull()) {
-            assertThat(task.path("report").toString()).contains(CHEAPEST_AVAILABLE.name());
+        assertThat(task.path("bestOffer").path("hotelName").asString()).isEqualTo(winner.name());
+        assertThat(task.path("bestOffer").path("negotiatedTotal").decimalValue()).isEqualByComparingTo(winnerTotal);
+
+        JsonNode report = task.path("report");
+        assertThat(report.path("bodyText").asString()).as("the API report is the email as sent")
+                .isEqualTo(email.path("text").asString());
+        assertThat(report.path("sentAt").isNull()).isFalse();
+        JsonNode fields = report.path("fields");
+        assertThat(fields.path("hotelName").asString()).isEqualTo(winner.name());
+        assertThat(fields.path("hotelAddress").asString()).isEqualTo(winner.address());
+        assertThat(fields.path("hotelPhone").asString()).isEqualTo(winner.phone());
+        assertThat(fields.path("checkIn").asString()).isEqualTo(request.checkIn().toString());
+        assertThat(fields.path("checkOut").asString()).isEqualTo(request.checkOut().toString());
+        assertThat(report.path("to").asString()).isEqualTo(request.to());
+        for (String assumption : request.assumptions()) {
+            assertThat(text).as("assumption stated in the email").contains(assumption);
+        }
+        if (request.assumptions().isEmpty()) {
+            assertThat(text).doesNotContain("Assumptions:");
+        }
+        assertThat(fields.path("price").decimalValue()).isEqualByComparingTo(winnerTotal);
+        assertThat(fields.path("currency").asString()).isEqualTo("CAD");
+        assertThat(report.path("transcripts").size()).isEqualTo(called.size());
+
+        // The recording link in the email serves the call audio (fetched from ElevenLabs on demand).
+        String recordingUrl = fields.path("recordingUrl").asString();
+        assertThat(recordingUrl).startsWith(PUBLIC_BASE_URL + "/").isSubstringOf(text);
+        var audio = client.get().uri(recordingUrl.substring(PUBLIC_BASE_URL.length())).exchange()
+                .expectStatus().isOk().expectBody(byte[].class).returnResult();
+        assertThat(audio.getResponseBody()).isEqualTo(AUDIO);
+        // The conversation id is URL-encoded in the path ("+" becomes %2B).
+        assertThat(providers.findAll(getRequestedFor(urlPathMatching("/v1/convai/conversations/.+/audio"))))
+                .extracting(r -> java.net.URLDecoder.decode(r.getUrl(), StandardCharsets.UTF_8))
+                .containsExactly("/v1/convai/conversations/" + winnerConversation + "/audio");
+    }
+
+    private void answer(Map<String, String> started, List<ScenarioHotel> batch, boolean concurrentWithRedelivery)
+            throws Exception {
+        if (!concurrentWithRedelivery) {
+            for (ScenarioHotel h : batch) {
+                postCallWebhook(started.get(h.phone()), h);
+            }
+            return;
+        }
+        List<ScenarioHotel> deliveries = new ArrayList<>(batch);
+        deliveries.addAll(batch); // every webhook delivered twice, in parallel
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(Math.max(1, deliveries.size()))) {
+            List<java.util.concurrent.Future<?>> posted = new ArrayList<>();
+            for (ScenarioHotel h : deliveries) {
+                posted.add(pool.submit(() -> {
+                    postCallWebhook(started.get(h.phone()), h);
+                    return null;
+                }));
+            }
+            for (var f : posted) {
+                f.get(60, java.util.concurrent.TimeUnit.SECONDS);
+            }
         }
     }
 
-    /** Prompt endpoint if present; otherwise the structured request the prompt should produce. */
-    private String submit() throws Exception {
-        String idempotencyKey = UUID.randomUUID().toString();
-        var prompt = client.post().uri("/api/tasks/prompt").contentType(MediaType.APPLICATION_JSON)
-                .header("Idempotency-Key", idempotencyKey)
-                .body(JSON.writeValueAsString(Map.of("prompt", PROMPT)))
-                .exchange().expectBody(String.class).returnResult();
-        int status = prompt.getStatus().value();
-        if (status == 202 || status == 200 || status == 201) {
-            return JSON.readTree(prompt.getResponseBody()).path("taskId").asString();
-        }
-        assertThat(status).as("prompt endpoint missing (404/405) or failing: %s", prompt.getResponseBody()).isIn(404, 405);
-        log.warn("dry run: POST /api/tasks/prompt not available ({}); using the structured POST /api/tasks", status);
-        Map<String, Object> request = new LinkedHashMap<>(promptParse());
-        request.remove("maxNightlyBudgetCad");
-        request.put("requestId", idempotencyKey);
-        request.put("destinationEmail", RECIPIENT);
-        request.put("deadline", Instant.now().plus(Duration.ofHours(2)).toString());
-        request.put("maximumTotalCad", 360);
-        String body = client.post().uri("/api/tasks").contentType(MediaType.APPLICATION_JSON)
-                .body(JSON.writeValueAsString(request))
+    private static ScenarioHotel byPhone(String phone) {
+        return HOTELS.stream().filter(h -> h.phone().equals(phone)).findFirst()
+                .orElseThrow(() -> new AssertionError("dialled an unknown number " + phone));
+    }
+
+    private static java.math.BigDecimal allInTotal(ScenarioHotel h) {
+        Map<String, Object> e = h.extracted();
+        return List.of("roomSubtotal", "hst", "municipalAccommodationTax", "mandatoryFees").stream()
+                .map(k -> (java.math.BigDecimal) e.get(k))
+                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+    }
+
+    private String submit(String prompt) throws Exception {
+        String body = client.post().uri("/api/tasks/prompt").contentType(MediaType.APPLICATION_JSON)
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .body(JSON.writeValueAsString(Map.of("prompt", prompt)))
                 .exchange().expectStatus().isAccepted().expectBody(String.class).returnResult().getResponseBody();
         return JSON.readTree(body).path("taskId").asString();
     }
@@ -512,7 +607,8 @@ class CompetitionDryRunIT {
         data.put("conversation_id", conversationId);
         data.put("status", "done");
         data.put("transcript", turns);
-        data.put("metadata", Map.of("call_duration_secs", second, "phone_call",
+        data.put("metadata", Map.of("start_time_unix_secs", Instant.now().getEpochSecond() - second,
+                "call_duration_secs", second, "phone_call",
                 Map.of("direction", "outbound", "external_number", h.phone())));
         String body = JSON.writeValueAsString(Map.of(
                 "type", "post_call_transcription", "event_timestamp", Instant.now().getEpochSecond(), "data", data));
@@ -531,19 +627,6 @@ class CompetitionDryRunIT {
     /** WireMock is reset per test, so every captured email belongs to this test's task. */
     private static List<LoggedRequest> emailsFor(String taskId) {
         return providers.findAll(postRequestedFor(urlEqualTo("/emails")));
-    }
-
-    private static String decodedAttachments(JsonNode email) {
-        StringBuilder all = new StringBuilder();
-        for (JsonNode a : email.path("attachments")) {
-            try {
-                all.append(new String(Base64.getDecoder().decode(a.path("content").asString("")), StandardCharsets.UTF_8))
-                        .append('\n');
-            } catch (IllegalArgumentException e) {
-                all.append(a.path("content").asString("")).append('\n');
-            }
-        }
-        return all.toString();
     }
 
     private static void await(String what, Duration timeout, BooleanSupplier condition) throws InterruptedException {
