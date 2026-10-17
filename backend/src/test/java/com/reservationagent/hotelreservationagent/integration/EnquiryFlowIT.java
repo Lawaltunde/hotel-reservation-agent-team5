@@ -28,6 +28,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Import(TestcontainersConfiguration.class)
 class EnquiryFlowIT {
 
+    /** Not Canadian, so it stays out of scope when coverage widens from Ontario to Canada. */
+    private static final String OUT_OF_SCOPE_CITY = "Seattle";
+
     @Autowired
     private RestTestClient client;
 
@@ -84,18 +87,16 @@ class EnquiryFlowIT {
     }
 
     @Test
-    void cityOutsideOntarioIsA422Problem() {
+    void cityOutsideTheSupportedAreaIsA422Problem() {
         client.post().uri("/api/tasks").contentType(MediaType.APPLICATION_JSON)
-                .body(body("Vancouver", UUID.randomUUID().toString()))
+                .body(body(OUT_OF_SCOPE_CITY, UUID.randomUUID().toString()))
                 .exchange()
                 .expectStatus().isEqualTo(422)
                 .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
                 .expectBody()
                 .jsonPath("$.status").isEqualTo(422)
-                .jsonPath("$.title").isEqualTo("Location out of scope")
-                .jsonPath("$.detail").isEqualTo("'Vancouver' is not a supported Ontario municipality")
-                .jsonPath("$.suggestions").isArray()
-                .jsonPath("$.suggestions.length()").isEqualTo(0);
+                .jsonPath("$.detail").value(d -> assertThat((String) d).contains(OUT_OF_SCOPE_CITY))
+                .jsonPath("$.suggestions").isArray();
     }
 
     @Test
@@ -120,7 +121,9 @@ class EnquiryFlowIT {
                 .expectStatus().isBadRequest()
                 .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
                 .expectBody()
-                .jsonPath("$.errors[0]").isEqualTo("checkIn is in the past");
+                // Only the status and that checkIn is named: the entry shape is changing to {field, message}.
+                .jsonPath("$.errors").isNotEmpty()
+                .consumeWith(r -> assertThat(new String(r.getResponseBody())).contains("checkIn").contains("past"));
     }
 
     @Test
@@ -135,7 +138,7 @@ class EnquiryFlowIT {
                 .expectBody()
                 .jsonPath("$[0].name").isEqualTo("Kenora")
                 .jsonPath("$[0].timeZone").isEqualTo("America/Winnipeg");
-        client.get().uri("/api/municipalities?q=vancouver").exchange()
+        client.get().uri("/api/municipalities?q=" + OUT_OF_SCOPE_CITY).exchange()
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$.length()").isEqualTo(0);

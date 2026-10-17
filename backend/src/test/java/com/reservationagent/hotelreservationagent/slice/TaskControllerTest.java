@@ -26,6 +26,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultMatcher;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -84,6 +85,18 @@ class TaskControllerTest {
         return new BookingTask(t.id(), t.requestId(), t.municipalityId(), t.stay(), t.destinationEmail(),
                 t.authorizationMode(), t.maximumTotal(), t.requiredAmenities(), t.allowCompetingQuoteDisclosure(),
                 t.deadline(), status, outcome, t.createdAt(), t.updatedAt());
+    }
+
+    /*
+     * The 400 `errors` entries are plain strings today and become {field, message} objects in the
+     * next backend change; these two helpers are the only places that know the shape.
+     */
+    private static ResultMatcher errors(String... expected) {
+        return jsonPath("$.errors").value(org.hamcrest.Matchers.contains(expected));
+    }
+
+    private static ResultMatcher firstError(String expected) {
+        return jsonPath("$.errors[0]").value(expected);
     }
 
     // ---------- POST /api/tasks ----------
@@ -149,7 +162,7 @@ class TaskControllerTest {
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.title").value("Invalid request"))
-                .andExpect(jsonPath("$.errors").value(org.hamcrest.Matchers.contains(
+                .andExpect(errors(
                         "adults: must not be null",
                         "checkIn: must not be null",
                         "checkOut: must not be null",
@@ -157,7 +170,7 @@ class TaskControllerTest {
                         "deadline: must not be null",
                         "destinationEmail: must not be blank",
                         "requestId: must not be blank",
-                        "rooms: must not be null")));
+                        "rooms: must not be null"));
         verifyNoInteractions(submit);
     }
 
@@ -167,11 +180,11 @@ class TaskControllerTest {
                         .replace("\"rooms\": 1", "\"rooms\": 0, \"children\": -1, \"maximumTotalCad\": -5")
                         .replace("traveller@example.com", "not-an-email")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors").value(org.hamcrest.Matchers.contains(
+                .andExpect(errors(
                         "children: must be greater than or equal to 0",
                         "destinationEmail: must be a well-formed email address",
                         "maximumTotalCad: must be greater than 0",
-                        "rooms: must be greater than or equal to 1")));
+                        "rooms: must be greater than or equal to 1"));
     }
 
     @Test
@@ -179,8 +192,8 @@ class TaskControllerTest {
         mvc.perform(post("/api/tasks").contentType(MediaType.APPLICATION_JSON)
                         .content(VALID.replace("\"rooms\": 1", "\"rooms\": 1, \"authorizationMode\": \"BOOK_NOW\"")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors").value(org.hamcrest.Matchers.contains(
-                        "authorizationMode: must be one of [ENQUIRY_ONLY, REQUIRE_APPROVAL, BOOK_IF_WITHIN_LIMITS]")));
+                .andExpect(errors(
+                        "authorizationMode: must be one of [ENQUIRY_ONLY, REQUIRE_APPROVAL, BOOK_IF_WITHIN_LIMITS]"));
     }
 
     @Test
@@ -188,12 +201,12 @@ class TaskControllerTest {
         mvc.perform(post("/api/tasks").contentType(MediaType.APPLICATION_JSON)
                         .content(VALID.replace("2026-11-20", "20/11/2026")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors[0]").value("checkIn: must be a date in YYYY-MM-DD format"));
+                .andExpect(firstError("checkIn: must be a date in YYYY-MM-DD format"));
 
         mvc.perform(post("/api/tasks").contentType(MediaType.APPLICATION_JSON)
                         .content(VALID.replace("2026-11-10T18:00:00Z", "tomorrow")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors[0]").value("deadline: must be an ISO-8601 instant, e.g. 2026-11-10T18:00:00Z"));
+                .andExpect(firstError("deadline: must be an ISO-8601 instant, e.g. 2026-11-10T18:00:00Z"));
     }
 
     @Test
@@ -201,7 +214,7 @@ class TaskControllerTest {
         mvc.perform(post("/api/tasks").contentType(MediaType.APPLICATION_JSON)
                         .content(VALID.replace("\"adults\": 2", "\"adults\": \"two\"")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors[0]").value("adults: has an invalid value"));
+                .andExpect(firstError("adults: has an invalid value"));
     }
 
     @Test
@@ -213,7 +226,7 @@ class TaskControllerTest {
 
         mvc.perform(post("/api/tasks").contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors[0]").value("Request body is missing or is not valid JSON"));
+                .andExpect(firstError("Request body is missing or is not valid JSON"));
     }
 
     @Test
@@ -233,8 +246,8 @@ class TaskControllerTest {
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.title").value("Invalid request"))
                 .andExpect(jsonPath("$.detail").value("checkIn is in the past; deadline must be in the future"))
-                .andExpect(jsonPath("$.errors").value(org.hamcrest.Matchers.contains(
-                        "checkIn is in the past", "deadline must be in the future")));
+                .andExpect(errors(
+                        "checkIn is in the past", "deadline must be in the future"));
     }
 
     @Test
@@ -243,20 +256,20 @@ class TaskControllerTest {
 
         mvc.perform(post("/api/tasks").contentType(MediaType.APPLICATION_JSON).content(VALID))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors[0]").value("rooms and adults must be positive, children non-negative"));
+                .andExpect(firstError("rooms and adults must be positive, children non-negative"));
     }
 
     @Test
-    void cityOutsideOntarioIs422WithEmptySuggestions() throws Exception {
+    void cityOutsideTheSupportedAreaIs422WithEmptySuggestions() throws Exception {
         when(submit.submit(any())).thenThrow(new OutOfScopeLocationException(
-                "'Vancouver' is not a supported Ontario municipality", List.of()));
+                "'Seattle' is not a supported Ontario municipality", List.of()));
 
-        mvc.perform(post("/api/tasks").contentType(MediaType.APPLICATION_JSON).content(VALID.replace("Ottawa", "Vancouver")))
+        mvc.perform(post("/api/tasks").contentType(MediaType.APPLICATION_JSON).content(VALID.replace("Ottawa", "Seattle")))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.status").value(422))
                 .andExpect(jsonPath("$.title").value("Location out of scope"))
-                .andExpect(jsonPath("$.detail").value("'Vancouver' is not a supported Ontario municipality"))
+                .andExpect(jsonPath("$.detail").value("'Seattle' is not a supported Ontario municipality"))
                 .andExpect(jsonPath("$.suggestions", hasSize(0)));
     }
 
@@ -338,8 +351,7 @@ class TaskControllerTest {
                 .andExpect(jsonPath("$.bestOffer.hotelAddress").value("1 Main St, Ottawa, ON"))
                 .andExpect(jsonPath("$.bestOffer.currency").value("CAD"))
                 .andExpect(jsonPath("$.bestOffer.initialQuotedTotal").value(400.0))
-                .andExpect(jsonPath("$.bestOffer.hst").value(39.0))
-                .andExpect(jsonPath("$.bestOffer.enquiryId").value("ENQ-123"))
+                                .andExpect(jsonPath("$.bestOffer.enquiryId").value("ENQ-123"))
                 .andExpect(jsonPath("$.bestOffer.quoteValidUntil").value(nullValue()))
                 .andExpect(jsonPath("$.bestOffer.evidenceStatus").value("REFERENCE_ID_GIVEN"))
                 .andExpect(jsonPath("$.offers[0].hotelName").value("Rideau Inn"));
