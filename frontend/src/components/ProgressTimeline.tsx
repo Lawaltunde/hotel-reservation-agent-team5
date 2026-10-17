@@ -42,7 +42,7 @@ export function ProgressTimeline({ status, authorizationMode, events, mode }: Pr
         <ConnectionBadge mode={mode} />
       </div>
 
-      <ol className="mt-4 flex flex-col gap-0">
+      <ol aria-label="Search steps" className="mt-4 flex flex-col gap-0">
         {steps.map((step, index) => {
           const state = stateOf(index);
           const isLast = index === steps.length - 1 && !problem;
@@ -78,8 +78,19 @@ export function ProgressTimeline({ status, authorizationMode, events, mode }: Pr
         )}
       </ol>
 
-      <h3 className="mt-6 text-sm font-semibold text-slate-700">Activity</h3>
-      <ol role="log" aria-live="polite" aria-relevant="additions" aria-label="Agent activity" className="mt-2 max-h-72 overflow-y-auto rounded-lg bg-slate-50 p-3 text-sm">
+      <h3 id="activity-heading" className="mt-6 text-sm font-semibold text-slate-700">
+        Agent activity
+      </h3>
+      {/* Scrollable, so it must be focusable for keyboard users. */}
+      <ol
+        id="activity-log"
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+        aria-labelledby="activity-heading"
+        tabIndex={0}
+        className="mt-2 max-h-72 overflow-y-auto rounded-lg bg-slate-50 p-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-700"
+      >
         {events.length === 0 ? (
           <li className="text-slate-500">Waiting for the first update…</li>
         ) : (
@@ -112,7 +123,7 @@ function StepDot({ state }: { state: StepState }) {
   if (state === "current") {
     return (
       <span aria-hidden="true" className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-sky-600 bg-white">
-        <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-sky-600" />
+        <span className="h-2.5 w-2.5 rounded-full bg-sky-600 motion-safe:animate-pulse" />
       </span>
     );
   }
@@ -127,5 +138,10 @@ function ConnectionBadge({ mode }: { mode: SubscriptionMode }) {
     closed: { text: "Finished", cls: "text-slate-500" },
   };
   const { text, cls } = map[mode];
-  return <span className={`text-xs ${cls}`}>{text}</span>;
+  return (
+    <span className={`text-xs ${cls}`}>
+      <span className="sr-only">Connection: </span>
+      {text}
+    </span>
+  );
 }
