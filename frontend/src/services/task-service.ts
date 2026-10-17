@@ -1,10 +1,26 @@
-import type { CreateTaskRequest, CreateTaskResponse, ProgressEvent, Task } from "@/models/task";
+import type { CreatePromptTaskRequest, CreateTaskResponse, ProgressEvent, Task } from "@/models/task";
 import { isTerminalStatus } from "@/models/task";
 import { API_BASE, ApiError, apiRequest, isAbortError, type RequestOptions } from "@/services/api-client";
 
-/** `POST /api/tasks`: starts a search. Resolves with the `202` body. */
-export function createTask(request: CreateTaskRequest, options?: RequestOptions): Promise<CreateTaskResponse> {
-  return apiRequest<CreateTaskResponse>("/tasks", { ...options, method: "POST", body: request });
+/**
+ * `POST /api/tasks/prompt`: starts a search from the user's free-text request. Resolves with the
+ * `202` body; rejects with 400 (city, email or check-in missing, bad dates), 422 (place not in
+ * Ontario or ambiguous) or 503 (prompt reader down). Resending the same `idempotencyKey` returns
+ * the task already created for it.
+ */
+export function createTaskFromPrompt(
+  request: CreatePromptTaskRequest,
+  idempotencyKey: string,
+  options?: RequestOptions,
+): Promise<CreateTaskResponse> {
+  return apiRequest<CreateTaskResponse>("/tasks/prompt", {
+    ...options,
+    method: "POST",
+    body: request,
+    headers: { "Idempotency-Key": idempotencyKey },
+    // The backend reads the prompt with a language model before answering.
+    timeoutMs: options?.timeoutMs ?? 45_000,
+  });
 }
 
 /** `GET /api/tasks/{id}`: current task state, offers included. */
