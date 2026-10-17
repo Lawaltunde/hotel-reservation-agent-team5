@@ -56,7 +56,7 @@ export function BackendStatus() {
       {/* Exactly "Backend: <state>" for assistive tech and the e2e smoke test; the visible label reads "Agent <state>". */}
       <span role="status" aria-live="polite">
         <span className="sr-only">Backend: </span>
-        <span className="sr-only sm:not-sr-only">{label}</span>
+        <span>{label}</span>
       </span>
     </div>
   );
