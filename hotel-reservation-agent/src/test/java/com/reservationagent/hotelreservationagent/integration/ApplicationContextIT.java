@@ -3,6 +3,7 @@ package com.reservationagent.hotelreservationagent.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.reservationagent.hotelreservationagent.support.TestcontainersConfiguration;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -11,8 +12,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * Boots the full Spring context against a real PostGIS container.
- * If Flyway is on the classpath, its migrations run during startup; this test then
- * checks that every recorded migration succeeded.
+ * Flyway migrations run during startup; these tests check that they all succeeded
+ * and that V1 installed the required extensions.
  */
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
@@ -35,14 +36,22 @@ class ApplicationContextIT {
     }
 
     @Test
-    void flywayMigrationsAppliedSuccessfullyWhenPresent() {
-        Boolean historyExists = jdbc.queryForObject(
-                "SELECT to_regclass('public.flyway_schema_history') IS NOT NULL", Boolean.class);
-        if (!Boolean.TRUE.equals(historyExists)) {
-            return; // Flyway not wired in yet; nothing to check.
-        }
+    void flywayMigrationsAppliedSuccessfully() {
+        Integer applied = jdbc.queryForObject(
+                "SELECT count(*) FROM flyway_schema_history WHERE success AND version IS NOT NULL",
+                Integer.class);
         Integer failed = jdbc.queryForObject(
                 "SELECT count(*) FROM flyway_schema_history WHERE NOT success", Integer.class);
+        assertThat(applied).as("applied Flyway migrations").isPositive();
         assertThat(failed).as("failed Flyway migrations").isZero();
+    }
+
+    @Test
+    void v1MigrationInstalledPostgisAndUnaccent() {
+        List<String> installed = jdbc.queryForList(
+                "SELECT extname FROM pg_extension WHERE extname IN ('postgis', 'unaccent')", String.class);
+        assertThat(installed).containsExactlyInAnyOrder("postgis", "unaccent");
+        String postgisVersion = jdbc.queryForObject("SELECT postgis_lib_version()", String.class);
+        assertThat(postgisVersion).startsWith("3.5");
     }
 }
