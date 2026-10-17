@@ -54,13 +54,7 @@ export function EmailPreview({ report }: { report: TaskReport }) {
       conversation: safeHttpUrl(t.conversationUrl),
     }))
     .filter((t) => t.text.trim());
-  const attachments = (report.attachments ?? [])
-    .map((a) =>
-      typeof a === "string"
-        ? { name: a, size: null }
-        : { name: (a.fileName ?? a.name ?? "").trim(), size: formatBytes(a.sizeBytes ?? a.size) },
-    )
-    .filter((a) => a.name);
+  const attachments = (report.attachments ?? []).map((a) => ({ name: a.fileName, size: formatBytes(a.sizeBytes) }));
   const delivery = deliveryTone(report.deliveryStatus);
   const cc = (report.cc ?? []).filter(Boolean);
   const stay = [isoDate(fields.checkIn), isoDate(fields.checkOut)].filter(Boolean).join(" to ");
