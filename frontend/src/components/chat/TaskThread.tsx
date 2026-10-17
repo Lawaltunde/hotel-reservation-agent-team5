@@ -78,8 +78,8 @@ export function TaskThread({ state, hasIntake }: TaskThreadProps) {
       {finished && offers.length > 0 && (
         <>
           <AgentMessage>
-            Here {offers.length === 1 ? "is the quote" : `are the ${offers.length} quotes`} I collected. Prices are all-in totals in
-            Canadian dollars. A quote is not a booking: nothing is reserved.
+            Here {offers.length === 1 ? "is the quote" : `are the ${offers.length} quotes`} I collected. Prices are all-in totals in Canadian dollars; a price marked ≈ is an estimate. A quote is not a booking: nothing is
+            reserved.
           </AgentMessage>
           {offers.map((offer, i) => (
             <AgentAttachment key={offer.offerId}>
