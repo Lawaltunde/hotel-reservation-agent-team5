@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 
-import { formatInstant, formatMoney, formatStayDate, humanize } from "@/components/format";
+import { formatBytes, formatInstant, formatMoney, formatStayDate, humanize } from "@/components/format";
 import type { TaskReport } from "@/models/task";
 
 /**
@@ -54,6 +54,7 @@ export function EmailPreview({ report }: { report: TaskReport }) {
       conversation: safeHttpUrl(t.conversationUrl),
     }))
     .filter((t) => t.text.trim());
+  const attachments = (report.attachments ?? []).map((a) => ({ name: a.fileName, size: formatBytes(a.sizeBytes) }));
   const delivery = deliveryTone(report.deliveryStatus);
   const cc = (report.cc ?? []).filter(Boolean);
   const stay = [isoDate(fields.checkIn), isoDate(fields.checkOut)].filter(Boolean).join(" to ");
@@ -145,6 +146,30 @@ export function EmailPreview({ report }: { report: TaskReport }) {
               )}
             </div>
           )}
+        </section>
+      )}
+
+      {attachments.length > 0 && (
+        <section aria-labelledby={`${id}-attachments`} className="border-b border-line px-4 py-3">
+          <h4 id={`${id}-attachments`} className="font-mono text-[0.7rem] tracking-[0.14em] text-muted uppercase">
+            Attachments ({attachments.length})
+          </h4>
+          <ul className="mt-2 flex flex-wrap gap-2">
+            {attachments.map((a, i) => (
+              <li
+                key={`${a.name}-${i}`}
+                className="inline-flex max-w-full items-center gap-2 rounded-md border border-line bg-mist/40 px-2.5 py-1.5 text-sm text-ink"
+              >
+                <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10.5 4.5 5.4 9.6a1.5 1.5 0 0 0 2.1 2.1l5.4-5.4a3 3 0 0 0-4.2-4.2L3.3 7.5a4.5 4.5 0 0 0 6.4 6.4l4-4" />
+                </svg>
+                <span className="min-w-0 truncate" title={a.name}>
+                  {a.name}
+                </span>
+                {a.size && <span className="shrink-0 font-mono text-xs text-muted">{a.size}</span>}
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
