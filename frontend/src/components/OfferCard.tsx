@@ -88,9 +88,13 @@ export function OfferCard({ offer, best = false, booked = false }: OfferCardProp
         <Row term="First quoted total" value={formatMoney(offer.initialQuotedTotal, currency)} />
         {offer.allInTotal !== undefined && <Row term="All-in total as stated by the hotel" value={formatMoney(offer.allInTotal, currency)} />}
         <Row term="Taxes in stated total" value={taxInclusionLabel(offer.taxInclusion)} />
+        {offer.roomSubtotal !== undefined && <Row term="Room, before taxes and fees" value={formatMoney(offer.roomSubtotal, currency)} />}
         <Row term="HST" value={formatMoney(offer.hst, currency)} />
         <Row term="Municipal accommodation tax" value={formatMoney(offer.municipalAccommodationTax, currency)} />
         <Row term="Mandatory fees" value={formatMoney(offer.mandatoryFees, currency)} />
+        {offer.optionalFees !== undefined && (
+          <Row term="Optional fees (not in all-in total)" value={formatMoney(offer.optionalFees, currency)} />
+        )}
         <Row term="Cancellation" value={offer.cancellationTerms ?? UNKNOWN} />
         <Row term="Deposit" value={offer.depositTerms ?? UNKNOWN} />
         <Row term="Hotel reference (not a booking)" value={offer.enquiryId ?? "None given"} mono={offer.enquiryId !== null} />
