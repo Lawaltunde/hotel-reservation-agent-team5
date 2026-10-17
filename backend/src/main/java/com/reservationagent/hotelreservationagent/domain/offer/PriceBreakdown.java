@@ -9,8 +9,9 @@ import java.util.Optional;
  * All arithmetic happens here, in Java; the language model only copies stated amounts.
  *
  * @param roomSubtotal              room charge for the whole stay BEFORE taxes and fees
- * @param hst                       Ontario HST (13%) amount, if stated
- * @param municipalAccommodationTax MAT amount, if stated (0 only if the hotel said there is none)
+ * @param hst                       all sales taxes stated (GST/HST/PST/QST combined), if stated
+ * @param municipalAccommodationTax any accommodation, tourism or destination levy (MAT, MRDT, ...), if stated
+ *                                  (0 only if the hotel said there is none)
  * @param mandatoryFees             non-removable resort/property/DMF/booking fees (0 only if the hotel said none)
  * @param optionalFees              removable or optional charges; never part of the comparable total
  * @param allInTotal                the final total the hotel stated, including taxes and mandatory fees
@@ -28,6 +29,11 @@ public record PriceBreakdown(
 
     /** Ontario HST on accommodation: a fixed legal rate, so applying it is a computation, not a guess. */
     public static final BigDecimal ONTARIO_HST_RATE = new BigDecimal("0.13");
+
+    /** {@link #price(BigDecimal)} at the Ontario rate. */
+    public Optional<OfferPrice> price() {
+        return price(ONTARIO_HST_RATE);
+    }
 
     /** Stated and computed totals may differ by rounding; more than this is flagged. */
     public static final Money DISAGREEMENT_TOLERANCE = Money.cad(BigDecimal.ONE);
@@ -77,9 +83,10 @@ public record PriceBreakdown(
     /**
      * The price to rank and report: tier A ({@link #comparableTotal()}) when known, else tier B, an
      * estimate from a stated pre-tax charge (the room subtotal, or a total the hotel said excludes
-     * taxes) plus HST (stated, else 13%) plus stated mandatory fees. Empty when neither exists.
+     * taxes) plus sales tax (stated, else {@code salesTaxRate}, the province's rate) plus stated
+     * mandatory fees. Empty when neither exists.
      */
-    public Optional<OfferPrice> price() {
+    public Optional<OfferPrice> price(BigDecimal salesTaxRate) {
         if (computedTotal().isPresent()) {
             return Optional.of(new OfferPrice(computedTotal().get(), OfferPrice.PriceBasis.SUM_OF_STATED_PARTS));
         }
@@ -92,7 +99,7 @@ public record PriceBreakdown(
         if (preTax == null) {
             return Optional.empty();
         }
-        Money estimate = preTax.plus(hst != null ? hst : preTax.times(ONTARIO_HST_RATE));
+        Money estimate = preTax.plus(hst != null ? hst : preTax.times(salesTaxRate));
         if (roomSubtotal != null && mandatoryFees != null) {
             estimate = estimate.plus(mandatoryFees);
         }

@@ -5,16 +5,18 @@ import com.reservationagent.hotelreservationagent.application.port.out.Municipal
 import com.reservationagent.hotelreservationagent.application.port.out.MunicipalityRepository;
 import com.reservationagent.hotelreservationagent.application.service.validation.RequestValidationException.FieldError;
 import com.reservationagent.hotelreservationagent.domain.geography.Municipality;
+import com.reservationagent.hotelreservationagent.domain.geography.Province;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
-/** Hard validation rules. Deterministic; no LLM involvement. "Today" is the date in Ontario, not UTC. */
+/** Hard validation rules. Deterministic; no LLM involvement. Destinations anywhere in Canada. */
 @Component
 public class BookingRequestValidator {
 
@@ -30,10 +32,12 @@ public class BookingRequestValidator {
         this.clock = clock;
     }
 
-    /** @return the Ontario municipality the request resolves to */
+    /** @return the municipality the request resolves to */
     public Municipality validate(Command command) {
         List<FieldError> errors = new ArrayList<>();
-        LocalDate today = LocalDate.now(clock.withZone(Municipality.DEFAULT_TIME_ZONE));
+        // The westernmost "today" in Canada: the destination's zone is not known yet, and a date that is
+        // still today somewhere in Canada must not be rejected as past.
+        LocalDate today = LocalDate.now(clock.withZone(ZoneId.of("America/Vancouver")));
 
         if (isBlank(command.requestId())) errors.add(new FieldError("requestId", "Request ID is required"));
         if (isBlank(command.city())) errors.add(new FieldError("city", "City is required"));
@@ -60,26 +64,44 @@ public class BookingRequestValidator {
         if (!errors.isEmpty()) {
             throw new RequestValidationException(errors);
         }
-        return resolveOntarioMunicipality(command.city());
+        return resolveMunicipality(command.city(),
+                command.intake() == null ? null : Province.parse(command.intake().provinceHint()).orElse(null));
     }
 
-    private Municipality resolveOntarioMunicipality(String city) {
-        List<Municipality> matches = municipalities.findByNameOrAlias(city.trim());
-        if (matches.isEmpty()) {
-            // Not in the table: a smaller town or a typo. Ask the geocoder before giving up.
-            Optional<MunicipalityGeocoder.Locality> locality = geocoder.findOntarioLocality(city.trim());
-            if (locality.isPresent()) {
-                return municipalities.addGeocoded(locality.get().name(), locality.get().centre());
+    /**
+     * Finds the Canadian municipality the guest means. With a province other than Ontario the seeded
+     * (Ontario) table is skipped, so "Windsor, Nova Scotia" never becomes Windsor ON. Otherwise the
+     * table is tried first, then the geocoder.
+     *
+     * @param provinceHint the province the guest named, or {@code null}
+     */
+    public Municipality resolveMunicipality(String city, Province provinceHint) {
+        String name = city.trim();
+        if (provinceHint == null || provinceHint == Province.ON) {
+            List<Municipality> matches = municipalities.findByNameOrAlias(name).stream()
+                    .filter(m -> provinceHint == null || m.provinceOrOntario() == provinceHint)
+                    .toList();
+            if (matches.size() == 1) {
+                return matches.getFirst();
             }
-            String prefix = city.trim().length() >= 3 ? city.trim().substring(0, 3) : city.trim();
-            throw new OutOfScopeLocationException("'" + city + "' is not a supported Ontario municipality",
-                    municipalities.searchByPrefix(prefix, 5).stream().map(Municipality::name).toList());
+            if (matches.size() > 1) {
+                // Same name in several provinces and none named: an Ontario match is the seeded, major one.
+                List<Municipality> ontario = matches.stream().filter(m -> m.provinceOrOntario() == Province.ON).toList();
+                if (ontario.size() == 1) {
+                    return ontario.getFirst();
+                }
+                throw new OutOfScopeLocationException("'" + city + "' matches several Canadian municipalities",
+                        matches.stream().map(m -> m.name() + ", " + m.provinceOrOntario().name()).toList());
+            }
         }
-        if (matches.size() > 1) {
-            throw new OutOfScopeLocationException(
-                    "'" + city + "' matches several Ontario municipalities", matches.stream().map(Municipality::name).toList());
+        // Not in the table (or another province): a smaller town, a typo, or elsewhere in Canada.
+        Optional<MunicipalityGeocoder.Locality> locality = geocoder.findCanadianLocality(name, provinceHint);
+        if (locality.isPresent()) {
+            return municipalities.addGeocoded(locality.get().name(), locality.get().centre(), locality.get().province());
         }
-        return matches.getFirst();
+        String prefix = name.length() >= 3 ? name.substring(0, 3) : name;
+        throw new OutOfScopeLocationException("'" + city + "' is not a Canadian city we could find",
+                municipalities.searchByPrefix(prefix, 5).stream().map(Municipality::name).toList());
     }
 
     private static boolean isBlank(String s) {

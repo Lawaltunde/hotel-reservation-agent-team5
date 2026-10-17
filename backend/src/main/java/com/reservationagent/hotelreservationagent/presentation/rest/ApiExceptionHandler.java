@@ -33,7 +33,7 @@ import tools.jackson.databind.exc.MismatchedInputException;
 /**
  * RFC 9457 problem details for the API. 400 bodies carry {@code errors: [{field, message}]}, where
  * {@code field} is the request field's JSON name or {@code null} for the whole request; 422 bodies
- * carry {@code suggestions: [...]} (other Ontario municipalities the city could mean); 503 means the
+ * carry {@code suggestions: [...]} (other municipalities the city could mean); 503 means the
  * AI provider that reads a free-text prompt is unavailable.
  */
 @RestControllerAdvice

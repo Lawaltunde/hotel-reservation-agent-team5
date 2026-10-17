@@ -2,6 +2,7 @@ package com.reservationagent.hotelreservationagent.application.service.call;
 
 import com.reservationagent.hotelreservationagent.application.policy.AgentPolicy;
 import com.reservationagent.hotelreservationagent.application.port.out.HotelIndex;
+import com.reservationagent.hotelreservationagent.application.port.out.MunicipalityRepository;
 import com.reservationagent.hotelreservationagent.application.port.out.PhoneCallRepository;
 import com.reservationagent.hotelreservationagent.application.port.out.VoiceCallProvider;
 import com.reservationagent.hotelreservationagent.domain.call.CallStatus;
@@ -47,7 +48,11 @@ public class CallScheduler {
     private final AgentPolicy policy;
     private final Clock clock;
 
-    public CallScheduler(VoiceCallProvider voice, PhoneCallRepository calls, HotelIndex hotels, AgentPolicy policy, Clock clock) {
+    private final MunicipalityRepository municipalities;
+
+    public CallScheduler(VoiceCallProvider voice, PhoneCallRepository calls, HotelIndex hotels, AgentPolicy policy, Clock clock,
+                         MunicipalityRepository municipalities) {
+        this.municipalities = municipalities;
         this.voice = voice;
         this.calls = calls;
         this.hotels = hotels;
@@ -108,12 +113,18 @@ public class CallScheduler {
         vars.put("rooms", stated(intake, StatedField.ROOMS, task.stay().rooms()));
         vars.put("adults", stated(intake, StatedField.ADULTS, task.stay().adults()));
         vars.put("children", stated(intake, StatedField.CHILDREN, task.stay().children()));
-        vars.put("stay_request", stayRequest(task, LocalDate.now(clock.withZone(Municipality.DEFAULT_TIME_ZONE))));
+        vars.put("stay_request", stayRequest(task, LocalDate.now(clock.withZone(zoneOf(task)))));
         vars.put("party", party(task));
         vars.put("max_negotiation_rounds", String.valueOf(policy.maxNegotiationRounds()));
         vars.put("authorization_mode", task.authorizationMode().name());
         vars.put("required_amenities", String.join(", ", task.requiredAmenities()));
         return vars;
+    }
+
+    /** "Tonight" is the destination's tonight. */
+    private java.time.ZoneId zoneOf(BookingTask task) {
+        return municipalities.findById(task.municipalityId()).map(Municipality::timeZone)
+                .orElse(Municipality.DEFAULT_TIME_ZONE);
     }
 
     private static String stated(TaskIntake intake, StatedField field, int value) {
