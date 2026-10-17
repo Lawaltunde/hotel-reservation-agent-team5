@@ -17,7 +17,7 @@ describe("OfferCard", () => {
     expect(within(card).getByText("Best offer")).toBeInTheDocument();
     expect(within(card).getByText("Quote, not booked")).toBeInTheDocument();
     expect(within(card).queryByText("Booked")).not.toBeInTheDocument();
-    expect(within(card).getByText("Negotiated total")).toBeInTheDocument();
+    expect(within(card).getByText("All-in total, CAD")).toBeInTheDocument();
     expect(within(card).getByText(/^CAD\s366\.00$/)).toBeInTheDocument();
     expect(within(card).getByText(/CAD\s34\.00 below the first quote of CAD\s400\.00/)).toBeInTheDocument();
     expect(row("Hotel reference (not a booking)")).toHaveTextContent("ENQ-123");
@@ -52,9 +52,10 @@ describe("OfferCard", () => {
 
     expect(screen.getByRole("heading", { name: "Unnamed hotel" })).toBeInTheDocument();
     expect(screen.getByText("Address unknown")).toBeInTheDocument();
-    expect(screen.getByText("Quoted total")).toBeInTheDocument();
-    expect(screen.getByText("Tax status unknown")).toBeInTheDocument();
-    for (const term of ["First quoted total", "Mandatory fees", "Cancellation", "Deposit", "Quote valid until", "Evidence"]) {
+    // An unknown all-in total is never replaced by a partial figure.
+    expect(screen.getByText(/can't be ranked/)).toBeInTheDocument();
+    expect(row("Taxes in stated total")).toHaveTextContent("Tax status unknown");
+    for (const term of ["First quoted total", "Mandatory fees", "Cancellation", "Deposit", "Evidence"]) {
       expect(row(term), term).toHaveTextContent(/^Unknown$/);
     }
     expect(row("Hotel reference (not a booking)")).toHaveTextContent("None given");

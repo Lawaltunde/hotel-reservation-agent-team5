@@ -10,9 +10,10 @@ describe("ResultSummary", () => {
   it("reports a finished search with no eligible hotels honestly", () => {
     render(<ResultSummary task={makeTask()} />);
 
-    expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Search finished. No eligible hotels found");
     expect(screen.getByText("Result")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Search finished without a usable quote" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "No eligible hotels found" })).toBeInTheDocument();
+    expect(screen.getByText("Try different or more flexible dates.")).toBeInTheDocument();
     expect(screen.getByText("No eligible hotels")).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(BOOKING_WORDS);
   });
@@ -21,9 +22,8 @@ describe("ResultSummary", () => {
     const best = makeOffer();
     render(<ResultSummary task={makeTask({ outcome: "ENQUIRY_COMPLETED", bestOffer: best, offers: [best], callsPlaced: 2 })} />);
 
-    expect(screen.getByRole("heading", { name: /^Best quote: CAD\s366\.00 at Rideau Inn$/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^Best quote: CAD\s366\.00 all-in at Rideau Inn$/ })).toBeInTheDocument();
     expect(screen.getByText(/This is a quote, not a booking\. Nothing has been reserved\./)).toBeInTheDocument();
-    expect(screen.getByText(/enquiry reference, not a confirmation number/)).toBeInTheDocument();
     expect(screen.getByText("Enquiry completed (not a booking)")).toBeInTheDocument();
   });
 
@@ -42,7 +42,7 @@ describe("ResultSummary", () => {
     render(<ResultSummary task={makeTask({ status: "DISCOVERING", outcome: null, candidatesScreened: null, callsPlaced: null })} />);
 
     expect(screen.getByText("So far")).toBeInTheDocument();
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
     expect(screen.getAllByText("Unknown")).toHaveLength(2);
     expect(screen.getByText("The agent is still working.")).toBeInTheDocument();
   });
