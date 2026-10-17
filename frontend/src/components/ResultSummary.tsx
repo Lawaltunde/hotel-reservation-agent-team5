@@ -17,7 +17,7 @@ const WIDEN_SEARCH = [
   "Try different or more flexible dates.",
   "Raise or remove the maximum budget.",
   "Remove amenities you can do without.",
-  "Search a nearby Ontario city.",
+  "Search a nearby city.",
 ];
 
 /** True only for a hotel-confirmed booking. Quotes and enquiries never count. */
@@ -114,7 +114,7 @@ function summarize(task: Task): Summary {
     case "INVALID_REQUEST":
       return { tone: "danger", title: "The request was rejected", body: "Something in the request was invalid. Please start a new search." };
     case "OUT_OF_SCOPE_LOCATION":
-      return { tone: "danger", title: "We only search Ontario", body: "That city isn't an Ontario municipality we support. Please start a new search." };
+      return { tone: "danger", title: "We only search Canada", body: "That place isn't a Canadian city we can search. Please start a new search." };
     case "NO_CANDIDATES":
       return {
         tone: "warning",
@@ -194,7 +194,7 @@ export function ResultSummary({ task }: { task: Task }) {
           {validity && <p>{validity}.</p>}
           {best.totalsDisagree && <p>The hotel&apos;s stated total and its itemized figures differ; see the quote below.</p>}
           <p>
-            All-in means room, HST, municipal accommodation tax and mandatory fees, in Canadian dollars. Any hotel reference
+            All-in means room, sales taxes, levies and fees, in Canadian dollars. Any hotel reference
             shown is an enquiry reference, not a confirmation number.
           </p>
         </div>
