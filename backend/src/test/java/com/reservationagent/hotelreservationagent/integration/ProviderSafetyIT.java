@@ -30,14 +30,21 @@ class ProviderSafetyIT {
             "ELEVENLABS_ENABLED", "GOOGLE_PLACES_ENABLED", "RESEND_ENABLED",
             "hotel-agent.elevenlabs.enabled", "hotel-agent.google-places.enabled", "hotel-agent.resend.enabled");
 
+    /** A live SMTP setup, as a .env for the Gmail transport would have it. */
+    private static final java.util.Map<String, String> LIVE_SMTP = java.util.Map.of(
+            "APP_EMAIL_TRANSPORT", "smtp", "SMTP_HOST", "smtp.gmail.com", "SMTP_USERNAME", "team5@example.com",
+            "SMTP_PASSWORD", "app-password");
+
     static {
         LIVE_SWITCHES.forEach(key -> System.setProperty(key, "true"));
+        LIVE_SMTP.forEach(System::setProperty);
         System.setProperty("OPENAI_API_KEY", "sk-live-looking-key");
     }
 
     @AfterAll
     static void clearSwitches() {
         LIVE_SWITCHES.forEach(System::clearProperty);
+        LIVE_SMTP.keySet().forEach(System::clearProperty);
         System.clearProperty("OPENAI_API_KEY");
     }
 
@@ -66,6 +73,15 @@ class ProviderSafetyIT {
         assertThat(voice.getClass().getSimpleName()).isEqualTo("LoggingVoiceCallProvider");
         assertThat(email.getClass().getSimpleName()).isEqualTo("LoggingEmailProvider");
         assertThat(enrichment.getClass().getSimpleName()).isEqualTo("NoOpEnrichmentProvider");
+    }
+
+    @Test
+    void smtpIsOffAndPointedAtADeadLocalPort() {
+        assertThat(System.getProperty("APP_EMAIL_TRANSPORT")).isEqualTo("smtp");
+
+        assertThat(env.getProperty("app.email.transport")).isEqualTo("resend");
+        assertThat(env.getProperty("spring.mail.host")).isEqualTo("127.0.0.1");
+        assertThat(env.getProperty("spring.mail.port")).isEqualTo("9");
     }
 
     @Test

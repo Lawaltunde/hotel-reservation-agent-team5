@@ -143,6 +143,8 @@ jobs:
           HOTEL_AGENT_ELEVENLABS_ENABLED: 'false'
           HOTEL_AGENT_GOOGLEPLACES_ENABLED: 'false'
           HOTEL_AGENT_RESEND_ENABLED: 'false'
+          APP_EMAIL_TRANSPORT: resend
+          SMTP_HOST: ''
           OPENAI_API_KEY: not-set
           SPRING_AI_OPENAI_BASE_URL: http://localhost:4010/v1
           SPRING_AI_OPENAI_API_KEY: sk-e2e-mock
