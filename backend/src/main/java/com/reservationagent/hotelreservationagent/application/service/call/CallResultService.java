@@ -1,5 +1,6 @@
 package com.reservationagent.hotelreservationagent.application.service.call;
 
+import com.reservationagent.hotelreservationagent.application.port.out.AiUsageRepository;
 import com.reservationagent.hotelreservationagent.application.port.out.BookingTaskRepository;
 import com.reservationagent.hotelreservationagent.application.port.out.OfferExtractor;
 import com.reservationagent.hotelreservationagent.application.port.out.OfferExtractor.ExtractedOffer;
@@ -40,9 +41,11 @@ public class CallResultService {
     private final OfferExtractor extractor;
     private final BookingTaskRepository tasks;
     private final Clock clock;
+    private final AiUsageRepository usage;
 
     public CallResultService(PhoneCallRepository calls, TranscriptRepository transcripts, OfferRepository offers,
-                             OfferExtractor extractor, BookingTaskRepository tasks, Clock clock) {
+                             OfferExtractor extractor, BookingTaskRepository tasks, Clock clock, AiUsageRepository usage) {
+        this.usage = usage;
         this.calls = calls;
         this.transcripts = transcripts;
         this.offers = offers;
@@ -64,9 +67,14 @@ public class CallResultService {
                 clock.instant().plus(TRANSCRIPT_RETENTION)));
 
         Instant endedAt = completed.endedAt() == null ? clock.instant() : completed.endedAt();
+        if (completed.durationSeconds() > 0) {
+            usage.record(task.id(), "elevenlabs-call", AiUsageRepository.TokenUsage.NONE, completed.durationSeconds());
+        }
         CallOutcome outcome = CallOutcome.CALL_DROPPED;
         if (completed.callSucceeded() && !transcript.turns().isEmpty()) {
-            ExtractedOffer extracted = extractor.extract(transcript.asPlainText(), task.stay());
+            OfferExtractor.Extraction extraction = extractor.extract(transcript.asPlainText(), task.stay());
+            usage.record(task.id(), "offer-extraction", extraction.usage(), 0);
+            ExtractedOffer extracted = extraction.offer();
             outcome = extracted.callOutcome() == null ? CallOutcome.UNKNOWN : extracted.callOutcome();
             if (outcome == CallOutcome.OFFER_RECEIVED && "CAD".equalsIgnoreCase(extracted.currency())) {
                 offers.save(toOffer(task, call, extracted, endedAt));

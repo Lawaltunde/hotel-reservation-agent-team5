@@ -29,23 +29,24 @@ class SpringAiTaskPromptInterpreter implements TaskPromptInterpreter {
     }
 
     @Override
-    public InterpretedPrompt interpret(String redactedPrompt) {
-        InterpretedPrompt interpreted;
+    public Interpretation interpret(String redactedPrompt) {
+        org.springframework.ai.chat.client.ResponseEntity<org.springframework.ai.chat.model.ChatResponse, InterpretedPrompt> response;
         try {
-            interpreted = chatClient.prompt()
+            response = chatClient.prompt()
                     .advisors(AdvisorParams.ENABLE_NATIVE_STRUCTURED_OUTPUT)
                     .system(systemPrompt)
                     .user(redactedPrompt)
                     .call()
-                    .entity(outputConverter);
+                    .responseEntity(outputConverter);
         } catch (RuntimeException e) {
             throw new InterpreterUnavailableException("Reading the request failed: " + e.getMessage()
                     + " (check that OPENAI_API_KEY is set and OPENAI_CHAT_MODEL is a valid model)", e);
         }
+        InterpretedPrompt interpreted = response.entity();
         if (interpreted == null) {
             throw new InterpreterUnavailableException("The AI model returned no structured request", null);
         }
         log.debug("Interpreted prompt as {}", interpreted);
-        return interpreted;
+        return new Interpretation(interpreted, Usage.of(response.response()));
     }
 }

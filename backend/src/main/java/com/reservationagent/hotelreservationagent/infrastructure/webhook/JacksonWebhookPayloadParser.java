@@ -54,11 +54,11 @@ class JacksonWebhookPayloadParser implements WebhookPayloadParser {
                 boolean succeeded = !"failed".equals(data.path("status").asString());
                 yield new ParsedEvent(eventId, type,
                         Optional.of(new CallCompleted(conversationId, turns, succeeded, succeeded ? null : "conversation failed",
-                                callEnd(data.path("metadata")))),
+                                callEnd(data.path("metadata")), data.path("metadata").path("call_duration_secs").asLong(0))),
                         Optional.empty());
             }
             case "call_initiation_failure" -> new ParsedEvent(eventId, type,
-                    Optional.of(new CallCompleted(conversationId, List.of(), false, data.path("failure_reason").asString("initiation failed"), null)),
+                    Optional.of(new CallCompleted(conversationId, List.of(), false, data.path("failure_reason").asString("initiation failed"), null, 0)),
                     Optional.empty());
             default -> new ParsedEvent(eventId, type, Optional.empty(), Optional.empty());
         };

@@ -15,7 +15,10 @@ public interface TaskPromptInterpreter {
     /**
      * @throws InterpreterUnavailableException if the AI provider cannot be reached or returns nothing
      */
-    InterpretedPrompt interpret(String redactedPrompt);
+    Interpretation interpret(String redactedPrompt);
+
+    record Interpretation(InterpretedPrompt prompt, AiUsageRepository.TokenUsage usage) {
+    }
 
     /**
      * Every field is {@code null} when the prompt did not say it.
