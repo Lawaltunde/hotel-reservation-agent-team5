@@ -838,6 +838,9 @@ without touching the orchestrator.
 
 > The commands below describe the intended setup; they will work once the corresponding
 > modules exist.
+>
+> **Backend today:** `cd hotel-reservation-agent && ./mvnw spring-boot:run` (needs Docker; PostGIS
+> starts automatically). See [`hotel-reservation-agent/README.md`](hotel-reservation-agent/README.md).
 
 ```bash
 # 1. Configuration
