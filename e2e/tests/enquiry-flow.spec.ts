@@ -1,96 +1,107 @@
 import { expect, test, type Page } from "@playwright/test";
 
 /**
- * Enquiry flow against the phase 2 contract:
- *   POST /api/tasks -> 202 {taskId, status}; GET /api/tasks/{id};
- *   SSE GET /api/tasks/{id}/events (event "progress"); GET /api/municipalities?q=;
- *   ProblemDetail 400/422 on invalid input.
+ * The chat intake end to end: the user types one message, the backend reads it
+ * (POST /api/tasks/prompt) and either starts a task or asks a follow-up question.
  *
- * UI specs, marked test.fixme: the search form is being replaced by a chat UI backed by
- * POST /api/tasks/prompt; they will be rewritten against its labels when it lands.
- * API-level checks of the same flow run in tasks-api.spec.ts.
+ * Needs the app pointed at the mock prompt reader (support/mock-openai.mjs) and a fresh database:
+ * the hotel index is empty and Places is off, so an Ottawa search ends COMPLETED with
+ * NO_ELIGIBLE_HOTELS. The mock picks its reading by keyword: "ottawa", "vancouver", "explode".
  */
 
-/** ISO date (yyyy-mm-dd) `days` from today. */
-function isoDateFromToday(days: number): string {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-const CHECK_IN = isoDateFromToday(30);
-const CHECK_OUT = isoDateFromToday(32);
 const EMAIL = "e2e-traveller@example.com";
 
-/** Words the UI must never show for an enquiry-only task with no bookings. */
-const DISHONEST_WORDING = /\b(booked|reservation confirmed|confirmation number)\b/i;
-
-async function chooseCity(page: Page, city: string) {
-  const cityField = page.getByLabel(/city/i);
-  await cityField.fill(city);
-  // The city field autocompletes from GET /api/municipalities; pick the suggestion if shown.
-  const suggestion = page.getByRole("option", { name: new RegExp(`^${city}`, "i") }).first();
-  if (await suggestion.isVisible({ timeout: 5_000 }).catch(() => false)) {
-    await suggestion.click();
-  }
+function composer(page: Page) {
+  return page.getByRole("textbox", { name: "Message the hotel agent" });
 }
 
-async function fillSearchForm(page: Page, city: string) {
-  await chooseCity(page, city);
-  await page.getByLabel(/check-?in/i).fill(CHECK_IN);
-  await page.getByLabel(/check-?out/i).fill(CHECK_OUT);
-  await page.getByLabel(/adults/i).fill("2");
-  await page.getByLabel(/e-?mail/i).fill(EMAIL);
+async function say(page: Page, text: string) {
+  await composer(page).fill(text);
+  await page.getByRole("button", { name: "Send" }).click();
 }
 
-async function submitSearch(page: Page) {
-  await page.getByRole("button", { name: /search|find|start|submit/i }).click();
+function taskIdFrom(page: Page): string {
+  const id = new URL(page.url()).searchParams.get("task");
+  expect(id, "task id in the URL").toBeTruthy();
+  return id!;
 }
 
-test.describe("enquiry flow", () => {
-  test.fixme("Ottawa enquiry runs to COMPLETED via the NO_CANDIDATES path", async ({ page }) => {
+test.describe("chat intake", () => {
+  test("an Ottawa request runs to a finished search with the result email", async ({ page }) => {
     await page.goto("/");
-    await fillSearchForm(page, "Ottawa");
 
-    const created = page.waitForResponse(
-      (r) => r.url().endsWith("/api/tasks") && r.request().method() === "POST",
-    );
-    await submitSearch(page);
+    const created = page.waitForResponse((r) => r.url().endsWith("/api/tasks/prompt") && r.request().method() === "POST");
+    await say(page, `cheapest hotel in Ottawa tomorrow for 2 nights, 2 adults, under $250 a night. Email ${EMAIL}`);
+    expect((await created).status()).toBe(202);
 
-    const response = await created;
-    expect(response.status()).toBe(202);
-    const { taskId } = await response.json();
-    expect(taskId).toBeTruthy();
+    const understood = page.getByRole("region", { name: "What I understood" });
+    await expect(understood).toBeVisible();
+    await expect(understood).toContainText("Ottawa");
+    await expect(understood).toContainText(EMAIL);
+    await expect(page).toHaveURL(/[?&]task=/);
 
-    await expect(page).toHaveURL(new RegExp(`/task/?\\?id=${taskId}`));
+    await expect(page.getByText("This search is finished.")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(`This is the email I sent to ${EMAIL}, exactly as it went out.`)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start a new search" })).toBeVisible();
+    await expect(composer(page)).toHaveCount(0);
 
-    // Progress arrives over SSE; with an empty hotel index the task ends without candidates.
-    await expect(page.getByText(/COMPLETED/i).first()).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByText(/no[_ ]candidates|no (suitable )?hotels/i).first()).toBeVisible();
-
-    await expect(page.locator("body")).not.toContainText(DISHONEST_WORDING);
-
-    // The API agrees with what the page shows.
-    const task = await page.request.get(`/api/tasks/${taskId}`);
-    expect(task.status()).toBe(200);
-    expect(await task.json()).toMatchObject({ taskId, status: "COMPLETED" });
+    const task = await (await page.request.get(`/api/tasks/${taskIdFrom(page)}`)).json();
+    expect(task).toMatchObject({ status: "COMPLETED", outcome: "NO_ELIGIBLE_HOTELS", city: "Ottawa" });
+    expect(task.report.to).toBe(EMAIL);
+    expect(task.report.bodyText).toContain("No confirmed available room was found");
+    expect(task.report.bodyText).not.toMatch(/\bbooking confirmed\b|\breservation confirmed\b/i);
   });
 
-  test.fixme("a city outside Ontario (Vancouver) is rejected with 422", async ({ page }) => {
+  test("starting a new search brings the composer back", async ({ page }) => {
     await page.goto("/");
-    await fillSearchForm(page, "Vancouver");
+    await say(page, `Ottawa tomorrow, 2 adults, ${EMAIL}`);
+    await expect(page.getByText("This search is finished.")).toBeVisible({ timeout: 60_000 });
 
-    const rejected = page.waitForResponse(
-      (r) => r.url().endsWith("/api/tasks") && r.request().method() === "POST",
-    );
-    await submitSearch(page);
+    await page.getByRole("button", { name: "Start a new search" }).click();
 
-    const response = await rejected;
-    expect(response.status()).toBe(422);
-    expect(response.headers()["content-type"]).toContain("application/problem+json");
+    await expect(composer(page)).toBeVisible();
+    await expect(composer(page)).toHaveValue("");
+    await expect(page).not.toHaveURL(/[?&]task=/);
+  });
 
-    // The user stays on the form and sees why.
-    await expect(page).not.toHaveURL(/\/task/);
-    await expect(page.getByRole("alert").first()).toContainText(/ontario/i);
+  test("a city outside Ontario gets an answer, not a task", async ({ page }) => {
+    await page.goto("/");
+
+    const rejected = page.waitForResponse((r) => r.url().endsWith("/api/tasks/prompt") && r.request().method() === "POST");
+    await say(page, `hotel in Vancouver tomorrow for 2 nights, ${EMAIL}`);
+    expect((await rejected).status()).toBe(422);
+
+    await expect(page.getByText(/I can only search hotels in Ontario\..*Which Ontario city should I search\?/)).toBeVisible();
+    await expect(page).not.toHaveURL(/[?&]task=/);
+    await expect(composer(page)).toBeEnabled();
+  });
+
+  test("a missing email is asked for, and the answer starts the search", async ({ page }) => {
+    await page.goto("/");
+
+    await say(page, "cheapest hotel in Ottawa tomorrow, 2 adults");
+    await expect(page.getByText("What email address should I send the results to?")).toBeVisible();
+    await expect(page).not.toHaveURL(/[?&]task=/);
+
+    const created = page.waitForResponse((r) => r.url().endsWith("/api/tasks/prompt") && r.request().method() === "POST");
+    await say(page, EMAIL);
+    const response = await created;
+    expect(response.status()).toBe(202);
+    // The follow-up is joined with the first message, so the backend sees the whole request.
+    expect(response.request().postDataJSON().prompt).toBe(`cheapest hotel in Ottawa tomorrow, 2 adults\n${EMAIL}`);
+
+    await expect(page.getByRole("region", { name: "What I understood" })).toContainText(EMAIL);
+  });
+
+  test("when the request reader is down, nothing starts and the user can try again", async ({ page }) => {
+    await page.goto("/");
+
+    const failed = page.waitForResponse((r) => r.url().endsWith("/api/tasks/prompt") && r.request().method() === "POST");
+    await say(page, `explode: Ottawa tomorrow, ${EMAIL}`);
+    expect((await failed).status()).toBe(503);
+
+    await expect(page.getByText(/Nothing has been started\./)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+    await expect(page).not.toHaveURL(/[?&]task=/);
   });
 });
