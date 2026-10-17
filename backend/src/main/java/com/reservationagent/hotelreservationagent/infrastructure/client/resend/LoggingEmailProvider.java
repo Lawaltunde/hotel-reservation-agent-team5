@@ -18,7 +18,8 @@ class LoggingEmailProvider implements EmailProvider {
 
     @Override
     public CompletableFuture<String> send(Email email) {
-        log.info("[email disabled] subject='{}' attachments={}\n{}", email.subject(), email.attachments().size(), email.textBody());
+        log.info("[email disabled] cc={} subject='{}' attachments={}\n{}", email.cc(), email.subject(),
+                email.attachments().size(), email.textBody());
         return CompletableFuture.completedFuture("dev-" + UUID.randomUUID());
     }
 }

@@ -5,6 +5,7 @@ import com.reservationagent.hotelreservationagent.domain.notification.EmailDeliv
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
 class EmailDeliveryPersistenceAdapter implements EmailDeliveryRepository {
@@ -32,7 +33,16 @@ class EmailDeliveryPersistenceAdapter implements EmailDeliveryRepository {
 
     @Override
     public Optional<EmailDelivery> findByProviderMessageId(String providerMessageId) {
-        return jpa.findByProviderMessageId(providerMessageId).map(e -> new EmailDelivery(e.id, e.taskId, e.recipient,
-                e.providerMessageId, e.status, e.sentAt, e.deliveredAt, e.bouncedAt));
+        return jpa.findByProviderMessageId(providerMessageId).map(EmailDeliveryPersistenceAdapter::toDomain);
+    }
+
+    @Override
+    public Optional<EmailDelivery> findLatestByTask(UUID taskId) {
+        return jpa.findFirstByTaskIdOrderBySentAtDesc(taskId).map(EmailDeliveryPersistenceAdapter::toDomain);
+    }
+
+    private static EmailDelivery toDomain(EmailDeliveryEntity e) {
+        return new EmailDelivery(e.id, e.taskId, e.recipient, e.providerMessageId, e.status, e.sentAt, e.deliveredAt,
+                e.bouncedAt);
     }
 }

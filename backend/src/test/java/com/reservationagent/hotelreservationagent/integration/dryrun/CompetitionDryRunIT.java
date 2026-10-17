@@ -279,10 +279,10 @@ class CompetitionDryRunIT {
                     .withRequestBody(containing(h.name()))
                     .willReturn(okJson(chatCompletion(JSON.writeValueAsString(h.extracted())))));
         }
-        // OpenAI: prompt parsing (POST /api/tasks/prompt). TODO(contract): match the backend's schema.
+        // OpenAI: prompt parsing (POST /api/tasks/prompt), in TaskPromptInterpreter.InterpretedPrompt's schema.
         providers.stubFor(post(urlPathMatching(".*/chat/completions")).atPriority(2)
                 .withRequestBody(containing("cheapest hotel in ottawa"))
-                .willReturn(okJson(chatCompletion(JSON.writeValueAsString(promptParse())))));
+                .willReturn(okJson(chatCompletion(JSON.writeValueAsString(promptInterpretation())))));
         providers.stubFor(post(urlPathMatching(".*")).atPriority(100)
                 .willReturn(aResponse().withStatus(599).withBody("dry run: no stub for this request")));
 
@@ -314,6 +314,22 @@ class CompetitionDryRunIT {
     }
 
     /** Best guess at the prompt parser's output; kept in one place until the contract is final. */
+    /** What the interpreter model returns for PROMPT: dates as expressions, budget with its unit. */
+    private static Map<String, Object> promptInterpretation() {
+        Map<String, Object> p = new LinkedHashMap<>();
+        p.put("city", "Ottawa");
+        p.put("checkIn", Map.of("kind", "TOMORROW"));
+        p.put("checkOut", null);
+        p.put("nights", 2);
+        p.put("rooms", 1);
+        p.put("adults", 2);
+        p.put("children", null);
+        p.put("budget", Map.of("amount", 180, "unit", "PER_NIGHT"));
+        p.put("amenities", List.of());
+        p.put("notes", null);
+        return p;
+    }
+
     private static Map<String, Object> promptParse() {
         Map<String, Object> p = new LinkedHashMap<>();
         p.put("city", "Ottawa");

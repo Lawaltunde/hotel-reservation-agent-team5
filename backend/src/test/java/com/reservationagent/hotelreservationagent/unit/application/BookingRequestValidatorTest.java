@@ -8,6 +8,7 @@ import com.reservationagent.hotelreservationagent.application.service.validation
 import com.reservationagent.hotelreservationagent.domain.geography.GeoPoint;
 import com.reservationagent.hotelreservationagent.domain.geography.Municipality;
 import com.reservationagent.hotelreservationagent.domain.task.AuthorizationMode;
+import com.reservationagent.hotelreservationagent.domain.task.TaskIntake;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -18,6 +19,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -37,7 +39,7 @@ class BookingRequestValidatorTest {
     private static final LocalDate TODAY = LocalDate.now(CLOCK);
 
     private final MunicipalityRepository municipalities = mock(MunicipalityRepository.class);
-    private final BookingRequestValidator validator = new BookingRequestValidator(municipalities, CLOCK);
+    private final BookingRequestValidator validator = new BookingRequestValidator(municipalities, name -> Optional.empty(), CLOCK);
 
     @BeforeEach
     void ottawaExists() {
@@ -48,7 +50,7 @@ class BookingRequestValidatorTest {
     private static Command command(String city, LocalDate in, LocalDate out, int rooms, int adults, int children,
                                    String email, Instant deadline, BigDecimal max) {
         return new Command("req-1", city, in, out, rooms, adults, children, email, deadline, Set.of(),
-                AuthorizationMode.ENQUIRY_ONLY, max, false);
+                AuthorizationMode.ENQUIRY_ONLY, max, false, TaskIntake.FORM);
     }
 
     private static Command valid() {
@@ -77,22 +79,22 @@ class BookingRequestValidatorTest {
     @Test
     void collectsEveryErrorAtOnceAndSkipsTheLookup() {
         Command bad = new Command(" ", " ", null, null, 0, 0, -1, "not-an-email", null, null, null,
-                BigDecimal.ZERO, false);
+                BigDecimal.ZERO, false, TaskIntake.FORM);
 
         assertThatExceptionOfType(RequestValidationException.class)
                 .isThrownBy(() -> validator.validate(bad))
-                .satisfies(e -> assertThat(e.errors()).containsExactly(
-                        "requestId is required",
-                        "city is required",
-                        "checkIn is required",
-                        "checkOut is required",
-                        "rooms must be at least 1",
-                        "adults must be at least 1",
-                        "children cannot be negative",
-                        "destinationEmail is invalid",
-                        "deadline must be in the future",
-                        "maximumTotalCad must be positive"))
-                .withMessageContaining("requestId is required; city is required");
+                .satisfies(e -> assertThat(e.errors().stream().map(Object::toString).toList()).containsExactly(
+                        "requestId: Request ID is required",
+                        "city: City is required",
+                        "checkIn: Check-in date is required",
+                        "checkOut: Check-out date is required",
+                        "rooms: At least 1 room is required",
+                        "adults: At least 1 adult is required",
+                        "children: Children cannot be negative",
+                        "destinationEmail: A valid email address is required",
+                        "deadline: Deadline must be in the future",
+                        "maximumTotalCad: Budget must be positive"))
+                .withMessageContaining("requestId: Request ID is required; city: City is required");
         verify(municipalities, never()).findByNameOrAlias(anyString());
     }
 
@@ -102,8 +104,8 @@ class BookingRequestValidatorTest {
                 NOW.plusSeconds(60), null);
         assertThatExceptionOfType(RequestValidationException.class)
                 .isThrownBy(() -> validator.validate(past))
-                .satisfies(e -> assertThat(e.errors())
-                        .containsExactly("checkIn is in the past", "checkOut must be after checkIn"));
+                .satisfies(e -> assertThat(e.errors().stream().map(Object::toString).toList())
+                        .containsExactly("checkIn: Check-in date is in the past", "checkOut: Check-out must be after check-in"));
     }
 
     @Test
@@ -112,7 +114,7 @@ class BookingRequestValidatorTest {
                 NOW.plusSeconds(60), null);
         assertThatExceptionOfType(RequestValidationException.class)
                 .isThrownBy(() -> validator.validate(zeroNights))
-                .satisfies(e -> assertThat(e.errors()).containsExactly("checkOut must be after checkIn"));
+                .satisfies(e -> assertThat(e.errors().stream().map(Object::toString).toList()).containsExactly("checkOut: Check-out must be after check-in"));
     }
 
     @Test
@@ -120,7 +122,7 @@ class BookingRequestValidatorTest {
         Command now = command("Ottawa", TODAY.plusDays(1), TODAY.plusDays(2), 1, 1, 0, "a@example.com", NOW, null);
         assertThatExceptionOfType(RequestValidationException.class)
                 .isThrownBy(() -> validator.validate(now))
-                .satisfies(e -> assertThat(e.errors()).containsExactly("deadline must be in the future"));
+                .satisfies(e -> assertThat(e.errors().stream().map(Object::toString).toList()).containsExactly("deadline: Deadline must be in the future"));
     }
 
     @ParameterizedTest
@@ -129,7 +131,7 @@ class BookingRequestValidatorTest {
         Command bad = command("Ottawa", TODAY.plusDays(1), TODAY.plusDays(2), 1, 1, 0, email, NOW.plusSeconds(60), null);
         assertThatExceptionOfType(RequestValidationException.class)
                 .isThrownBy(() -> validator.validate(bad))
-                .satisfies(e -> assertThat(e.errors()).containsExactly("destinationEmail is invalid"));
+                .satisfies(e -> assertThat(e.errors().stream().map(Object::toString).toList()).containsExactly("destinationEmail: A valid email address is required"));
     }
 
     @Test
