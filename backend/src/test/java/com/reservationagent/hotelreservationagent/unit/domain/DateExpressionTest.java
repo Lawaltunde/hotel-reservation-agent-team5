@@ -2,7 +2,6 @@ package com.reservationagent.hotelreservationagent.unit.domain;
 
 import com.reservationagent.hotelreservationagent.domain.task.DateExpression;
 import com.reservationagent.hotelreservationagent.domain.task.DateExpression.Kind;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -112,10 +111,7 @@ class DateExpressionTest {
     }
 
     @Test
-    @Disabled("BUG: \"Feb 29\" without a year resolves to 2027-02-28, because MonthDay.atYear silently "
-            + "moves Feb 29 to Feb 28 in a non-leap year; hotels would be asked about the wrong night")
     void february29WithoutAYearIsTheNextFebruary29NeverFebruary28() {
-        assertThat(absolute(null, 2, 29).resolve(WEDNESDAY, WEDNESDAY))
-                .satisfiesAnyOf(d -> assertThat(d).isEmpty(), d -> assertThat(d).contains(LocalDate.parse("2028-02-29")));
+        assertThat(absolute(null, 2, 29).resolve(WEDNESDAY, WEDNESDAY)).contains(LocalDate.parse("2028-02-29"));
     }
 }
