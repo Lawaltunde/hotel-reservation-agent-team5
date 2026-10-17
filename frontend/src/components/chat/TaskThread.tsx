@@ -61,7 +61,13 @@ export function TaskThread({ state, hasIntake }: TaskThreadProps) {
       {!hasIntake && task.request?.originalPrompt && <UserMessage text={task.request.originalPrompt} />}
 
       <AgentMessage wide>
-        <p>{finished ? "Here's what I understood from your request." : `Got it. Here's what I understood. I'm starting now: you can watch progress here, and ${email ? `I'll email the result to ${email}` : "I'll email you the result"}.`}</p>
+        <p>{finished ? "Here's what I understood from your request." : `Got it. Here's what I understood. I'm starting now: you can watch progress here, and ${
+                task.request?.emailSource === "ORGANIZER_FALLBACK"
+                  ? "the result will go to the organizer inbox, since your message had no email"
+                  : email
+                    ? `I'll email the result to ${email}`
+                    : "I'll email you the result"
+              }.`}</p>
         <UnderstoodCard task={task} />
       </AgentMessage>
 
