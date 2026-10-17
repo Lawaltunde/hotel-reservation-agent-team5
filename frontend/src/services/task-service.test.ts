@@ -184,6 +184,31 @@ describe("subscribeToTask", () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
+  it("notices a terminal status that an open stream never delivers", async () => {
+    vi.useFakeTimers();
+    fetchMock
+      .mockResolvedValueOnce(taskResponse("CALLING_FOR_QUOTES"))
+      .mockResolvedValueOnce(taskResponse("CALLING_FOR_QUOTES"))
+      .mockResolvedValueOnce(taskResponse("COMPLETED"));
+    const r = recorder();
+
+    subscribeToTask(TASK_ID, r.handlers, { streamCheckIntervalMs: 1000 });
+    await vi.advanceTimersByTimeAsync(0);
+    const source = FakeEventSource.instances[0];
+    source.onopen?.();
+    expect(r.modes.at(-1)).toBe("live");
+
+    await vi.advanceTimersByTimeAsync(1000); // still calling: nothing new
+    expect(r.events).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1000); // the stream stayed silent, but the task finished
+    expect(r.events.map((e) => [e.status, e.message])).toEqual([["COMPLETED", null]]);
+    expect(source.closed).toBe(true);
+    expect(r.modes.at(-1)).toBe("closed");
+
+    await vi.advanceTimersByTimeAsync(10_000); // stopped: no more requests
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
   it("keeps polling through transient errors", async () => {
     vi.useFakeTimers();
     vi.stubGlobal("EventSource", undefined);
