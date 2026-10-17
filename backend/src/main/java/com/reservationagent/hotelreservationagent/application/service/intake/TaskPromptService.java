@@ -11,6 +11,7 @@ import com.reservationagent.hotelreservationagent.application.service.validation
 import com.reservationagent.hotelreservationagent.application.service.validation.RequestValidationException;
 import com.reservationagent.hotelreservationagent.application.service.validation.RequestValidationException.FieldError;
 import com.reservationagent.hotelreservationagent.domain.geography.Municipality;
+import com.reservationagent.hotelreservationagent.domain.geography.Province;
 import com.reservationagent.hotelreservationagent.domain.shared.Money;
 import com.reservationagent.hotelreservationagent.domain.task.AuthorizationMode;
 import com.reservationagent.hotelreservationagent.domain.task.BookingTask;
@@ -25,6 +26,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -43,11 +45,11 @@ import java.util.stream.Collectors;
 /**
  * Turns one free-text request (possibly several chat messages joined by newlines, the latest
  * winning) into a {@link Command} and submits it through the normal path, so a prompt gets the
- * validation and Ontario check of a form submission.
+ * validation and Canadian-city check of a form submission.
  *
  * <p>Java owns everything that must be exact: the email address is found with a regular expression
  * and replaced with {@value #EMAIL_PLACEHOLDER} before the prompt reaches the AI model, dates are
- * resolved against today in Ontario, and what the prompt left out is handled by {@link IntakeDefaults}
+ * resolved against today at the destination, and what the prompt left out is handled by {@link IntakeDefaults}
  * and recorded as unstated rather than presented as the user's.
  */
 @Service
@@ -119,7 +121,12 @@ public class TaskPromptService implements SubmitTaskPromptUseCase {
                 interpreter.interpret(EMAIL.matcher(prompt).replaceAll(EMAIL_PLACEHOLDER));
         InterpretedPrompt p = interpretation.prompt();
 
-        LocalDate today = LocalDate.now(clock.withZone(Municipality.DEFAULT_TIME_ZONE));
+        // "Tonight" and "Friday" mean the destination's day: resolve the city first for its time zone.
+        Province provinceHint = Province.parse(p.province()).orElse(null);
+        ZoneId zone = p.city() == null || p.city().isBlank() ? Municipality.DEFAULT_TIME_ZONE
+                : Optional.ofNullable(validator.resolveMunicipality(p.city(), provinceHint))
+                        .map(Municipality::timeZone).orElse(Municipality.DEFAULT_TIME_ZONE);
+        LocalDate today = LocalDate.now(clock.withZone(zone));
         LocalDate checkIn = resolve(p.checkIn(), today, today, "check-in", assumptions);
         LocalDate checkOut = checkIn == null ? null
                 : resolve(p.checkOut(), today, checkIn.plusDays(1), "check-out", assumptions);
@@ -144,7 +151,8 @@ public class TaskPromptService implements SubmitTaskPromptUseCase {
         if (maxBudget != null) stated.add(StatedField.MAX_BUDGET);
 
         TaskIntake intake = new TaskIntake(prompt, stated, emailSource, p.notes(),
-                perNight == null || perNight.signum() <= 0 ? null : Money.cad(perNight), assumptions);
+                perNight == null || perNight.signum() <= 0 ? null : Money.cad(perNight), assumptions,
+                provinceHint == null ? null : provinceHint.name());
         Command command = new Command(
                 requestId,
                 p.city(),

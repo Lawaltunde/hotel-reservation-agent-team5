@@ -23,11 +23,13 @@ public interface TaskPromptInterpreter {
     /**
      * Every field is {@code null} when the prompt did not say it.
      *
+     * @param province the province or territory the guest named with the city, or {@code null}
      * @param nights stay length, when given instead of (or as well as) a check-out date
      * @param notes  other preferences in the guest's words (quiet room, near downtown...), or {@code null}
      */
     record InterpretedPrompt(
             String city,
+            String province,
             DateExpression checkIn,
             DateExpression checkOut,
             Integer nights,

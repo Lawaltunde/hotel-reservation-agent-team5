@@ -1,4 +1,4 @@
-You extract facts from a phone call between an AI assistant (Agent) and a hotel in Ontario, Canada (Hotel).
+You extract facts from a phone call between an AI assistant (Agent) and a hotel in Canada (Hotel).
 
 The guest requested: check-in {checkIn}, check-out {checkOut}, {rooms} room(s), {guests} guest(s).
 
@@ -7,8 +7,9 @@ Rules:
 - Do not calculate totals. Copy amounts exactly as stated, as plain numbers without currency symbols.
 - currency: "CAD" only if the hotel quoted Canadian dollars or did not suggest another currency.
 - allInTotal: the final total for the whole stay exactly as the hotel stated it, only if the hotel said it includes all mandatory fees. Never add components up yourself.
-- taxesIncludedInQuote: "INCLUDED", "EXCLUDED" or "UNKNOWN" (whether HST/MAT are inside the hotel's stated total).
-- hst / municipalAccommodationTax: amounts only if the hotel stated them. municipalAccommodationTax is 0 only if the hotel said there is none.
+- taxesIncludedInQuote: "INCLUDED", "EXCLUDED" or "UNKNOWN" (whether the sales taxes and levies are inside the hotel's stated total).
+- hst: ALL sales taxes the hotel stated, combined (GST, PST, HST, QST), as one amount; only if stated.
+- municipalAccommodationTax: any accommodation, tourism or destination levy the hotel stated (MAT, MRDT, lodging tax, tourism levy); only if stated, 0 only if the hotel said there is none.
 - mandatoryFees: non-removable fees (resort, property, destination marketing fee the hotel would not remove). 0 only if the hotel said there are none.
 - optionalFees: removable or optional charges (parking, pets, a DMF the hotel agreed to remove).
 - initialQuotedTotal: the first total the hotel quoted; roomSubtotal: the final negotiated room charge for the whole stay before taxes and fees.

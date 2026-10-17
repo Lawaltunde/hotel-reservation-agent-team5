@@ -54,9 +54,10 @@ public record TaskResponse(
                 snapshot.candidatesScreened(),
                 snapshot.callsPlaced(),
                 snapshot.bestOffer() == null ? null
-                        : OfferResponse.from(snapshot.bestOffer(), snapshot.hotels().get(snapshot.bestOffer().hotelId())),
+                        : OfferResponse.from(snapshot.bestOffer(), snapshot.hotels().get(snapshot.bestOffer().hotelId()),
+                                snapshot.salesTaxRate()),
                 snapshot.offers().stream()
-                        .map(o -> OfferResponse.from(o, snapshot.hotels().get(o.hotelId())))
+                        .map(o -> OfferResponse.from(o, snapshot.hotels().get(o.hotelId()), snapshot.salesTaxRate()))
                         .toList(),
                 ReportResponse.from(snapshot.report(), snapshot.delivery()),
                 t.createdAt(),

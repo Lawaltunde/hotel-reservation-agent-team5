@@ -18,7 +18,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * "hotels in {city}, Ontario" via Google Places API (New) Text Search, biased to the municipality.
+ * "hotels in {city}, {province}" via Google Places API (New) Text Search, biased to the municipality.
  * Only the fields in the mask are requested (and billed). The hotels table is empty until open-data
  * ingestion exists, so this is how a task gets candidates today.
  * <p>
@@ -46,7 +46,7 @@ class GooglePlacesHotelDiscovery implements HotelDiscoverySource {
     @Override
     public CompletableFuture<List<DiscoveredHotel>> search(Municipality municipality, double radiusKm) {
         Map<String, Object> body = Map.of(
-                "textQuery", "hotels in " + municipality.name() + ", Ontario",
+                "textQuery", "hotels in " + municipality.name() + ", " + municipality.provinceOrOntario().displayName(),
                 "includedType", "lodging",
                 "pageSize", PAGE_SIZE,
                 "regionCode", "CA",
