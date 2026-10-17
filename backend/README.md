@@ -22,13 +22,35 @@ datasource. Flyway applies `src/main/resources/db/migration` on startup. Stop th
 | `GET /api/health` | `{"status":"UP","service":"hotel-reservation-agent","time":"<ISO-8601 instant>"}` |
 | `GET /actuator/health` | Actuator health (includes the database) |
 | `POST /api/tasks` | `202 {taskId, status}` + `Location`. Idempotent on `requestId`. 400 / 422 as ProblemDetail |
-| `GET /api/tasks/{id}` | Task status, outcome, counts and offers (money: CAD numbers with 2 decimals, unknown = `null`). 404 if unknown |
+| `POST /api/tasks/prompt` | Body `{"prompt": "..."}` (1-2000 chars). `202 {taskId, status}` + `Location`. Optional `Idempotency-Key` header. 400 / 422 as above, 503 if the AI provider is unavailable |
+| `GET /api/tasks/{id}` | Task status, outcome, `request` (see below), counts and offers (money: CAD numbers with 2 decimals, unknown = `null`). 404 if unknown |
 | `GET /api/tasks/{id}/events` | SSE, event `progress` `{taskId, status, message, at}`: current status on connect, then each change; completes on a terminal status |
 | `GET /api/municipalities?q=ott&limit=10` | `[{id, name, timeZone}]` (Ontario only) |
 | `POST /webhooks/elevenlabs`, `POST /webhooks/resend` | 200 accepted or duplicate, 401 bad/missing signature |
 
-Errors are RFC 9457 problem details: 400 has `errors: [...]`, 422 (city not an Ontario municipality,
-or ambiguous) has `suggestions: [...]`.
+Errors are RFC 9457 problem details: 400 has `errors: [{field, message}]` (`field` is the JSON
+property, or `null` for the whole request), 422 (city not an Ontario municipality, or ambiguous) has
+`suggestions: [...]`.
+
+### Prompt intake
+
+`POST /api/tasks/prompt` reads one free-text request ("2 nights in Ottawa from next Friday for 2,
+under $400, me@example.com") and submits it through the same validation as `POST /api/tasks`.
+
+- The email address is found in Java and replaced with `<email>` before the prompt goes to OpenAI.
+  None, or more than one, is a 400 on `email`.
+- The model describes dates ("next Friday", "Nov 20"); Java resolves them against today in
+  America/Toronto. A date without a year is the next one on or after today.
+- Defaults (`IntakeDefaults`): 1 room, 1 adult, 0 children; no check-out means 1 night ("this/next
+  weekend" means 2). A missing check-in is a 400. A nightly budget is multiplied by the nights.
+- Deadline is now + `app.intake.default-deadline` (30 min); mode is always `ENQUIRY_ONLY`.
+- 400 `field` values: `prompt`, `email`, `city`, `checkIn`, `checkOut`, `rooms`, `adults`,
+  `children`, `maxBudget`, `Idempotency-Key`.
+
+`request` in `GET /api/tasks/{id}` is what the task searches for, after defaults:
+`{city, checkIn, checkOut, adults, children, rooms, maxBudget, amenities[], email, originalPrompt}`.
+`city` is the resolved municipality, `maxBudget` is the all-in CAD limit for the stay or `null`,
+and `originalPrompt` is `null` for `POST /api/tasks`.
 
 ### Offer fields
 
@@ -62,7 +84,8 @@ A variable that is present but empty falls back to the default below.
 |---|---|---|
 | `server.port` | `8080` | |
 | `app.cors.allowed-origins` | `http://localhost:3000` | Only needed when a browser calls the API cross-origin; the packaged UI is same-origin. |
-| `OPENAI_API_KEY` | `not-set` | The app starts without it; transcript offer extraction then fails with a clear error. |
+| `OPENAI_API_KEY` | `not-set` | The app starts without it; offer extraction then fails with a clear error and prompt intake returns 503. |
+| `app.intake.default-deadline` / `APP_INTAKE_DEFAULT_DEADLINE` | `PT30M` | Report deadline for a prompt-started task |
 | `OPENAI_CHAT_MODEL` | `gpt-5.4-mini` | Needs Structured Outputs (JSON schema). |
 | `OPENAI_REASONING_EFFORT` / `OPENAI_TEMPERATURE` | `none` / `0.1` | Sampling parameters are only accepted with reasoning effort `none`. |
 | `hotel-agent.{elevenlabs,google-places,resend}.enabled` | `false` | `false` uses logging / no-op stubs; set `ELEVENLABS_ENABLED`, `GOOGLE_PLACES_ENABLED`, `RESEND_ENABLED` to `true` to call the real APIs. |
