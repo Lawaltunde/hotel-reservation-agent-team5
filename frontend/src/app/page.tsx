@@ -1,4 +1,5 @@
 import { BackendStatus } from "@/components/BackendStatus";
+import { ClientSearchForm } from "@/components/ClientSearchForm";
 
 export default function HomePage() {
   return (
@@ -8,22 +9,18 @@ export default function HomePage() {
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Hotel Deal Agent</h1>
           <BackendStatus />
         </div>
-        <p className="text-lg text-slate-600">
-          Finds and negotiates the cheapest suitable hotel in Ontario
+        <p className="text-lg text-slate-600">Finds and negotiates the cheapest suitable hotel in Ontario</p>
+        <p className="text-sm text-slate-500">
+          Pick a city, your dates and guests. The agent phones the most promising hotels, asks for
+          their lowest all-in direct rate, and emails you the result with the call transcript.
         </p>
       </header>
 
-      <section
-        aria-labelledby="search-heading"
-        className="rounded-xl border border-dashed border-slate-300 bg-white p-6"
-      >
-        <h2 id="search-heading" className="text-lg font-medium">
-          Search
+      <section aria-labelledby="search-heading" className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+        <h2 id="search-heading" className="mb-6 text-xl font-semibold">
+          Start a search
         </h2>
-        <p className="mt-2 text-slate-600">
-          The search form is coming next: pick an Ontario city, your dates and guests, and the
-          agent will phone hotels and negotiate on your behalf.
-        </p>
+        <ClientSearchForm />
       </section>
     </main>
   );
