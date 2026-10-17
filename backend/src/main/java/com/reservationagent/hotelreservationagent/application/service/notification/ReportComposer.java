@@ -50,6 +50,7 @@ public class ReportComposer {
                 Best negotiated all-in total (CAD): %s
                 Savings versus initial phone quote: %s
                 Taxes and fees (HST / MAT / other): %s
+                Hotel's stated all-in total: %s
                 Cancellation / payment terms: %s
                 Offer expiry: %s
                 Hotel enquiry/reference ID: %s
@@ -79,8 +80,10 @@ public class ReportComposer {
                 o == null ? UNKNOWN : "HST %s / MAT %s / mandatory fees %s / taxes included: %s".formatted(
                         money(o.negotiated().hst()), money(o.negotiated().municipalAccommodationTax()),
                         money(o.negotiated().mandatoryFees()), o.negotiated().taxInclusion()),
+                o == null ? UNKNOWN : money(o.negotiated().allInTotal()) + (o.negotiated().totalsDisagree()
+                        ? " (does not match the itemised taxes and fees; please confirm with the hotel)" : ""),
                 o == null ? UNKNOWN : orUnknown(o.cancellationTerms()) + " / " + orUnknown(o.depositTerms()),
-                o == null || o.quoteValidUntil() == null ? UNKNOWN : o.quoteValidUntil().toString(),
+                o == null ? UNKNOWN : expiry(o),
                 o == null || o.enquiryId() == null ? "Not provided" : o.enquiryId(),
                 booked ? in.reservation().confirmationNumber() : "Not booked",
                 o == null ? "Not received" : o.evidenceStatus().toString(),
@@ -103,6 +106,12 @@ public class ReportComposer {
             case NO_VALID_QUOTE, NO_ELIGIBLE_HOTELS -> "No comparable offer was obtained. You may widen the dates, budget or area.";
             default -> "";
         };
+    }
+
+    private static String expiry(HotelOffer o) {
+        String until = o.quoteValidUntil() == null ? UNKNOWN : o.quoteValidUntil().toString();
+        String said = o.quoteValidity().statedText();
+        return said == null ? until : "%s (hotel said: \"%s\")".formatted(until, said);
     }
 
     private static String money(Money m) {
