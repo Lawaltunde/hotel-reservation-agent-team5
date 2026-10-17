@@ -1,0 +1,21 @@
+{
+  "name": "hotel-deal-agent-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Playwright end-to-end tests against the packaged Hotel Deal Agent jar",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "report": "playwright show-report",
+    "typecheck": "tsc --noEmit",
+    "install-browsers": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "24.19.1",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  }
+}
