@@ -16,14 +16,14 @@ function makeReport(overrides: Partial<TaskReport> = {}): TaskReport {
 }
 
 describe("EmailPreview attachments", () => {
-  it("lists attachment names with sizes when given", () => {
+  it("lists each attachment's name and size, in order", () => {
     render(
       <EmailPreview
         report={makeReport({
           attachments: [
-            { fileName: "call-1-lakeview-inn.mp3", contentType: "audio/mpeg", sizeBytes: 3_565_158 },
-            { name: "call-1-lakeview-inn.txt", size: null },
-            "call-2-harbour-hotel.txt",
+            { fileName: "call-1-lakeview-inn.mp3", contentType: "audio/mpeg", sizeBytes: 1_998_188 },
+            { fileName: "call-1-lakeview-inn-transcript.txt", contentType: "text/plain", sizeBytes: 812 },
+            { fileName: "call-2-budget-motel.mp3", contentType: "audio/mpeg", sizeBytes: 3_565_158 },
           ],
         })}
       />,
@@ -32,9 +32,9 @@ describe("EmailPreview attachments", () => {
     const section = screen.getByRole("region", { name: "Attachments (3)" });
     const items = within(section).getAllByRole("listitem");
     expect(items.map((li) => li.textContent)).toEqual([
-      "call-1-lakeview-inn.mp33.4 MB",
-      "call-1-lakeview-inn.txt",
-      "call-2-harbour-hotel.txt",
+      "call-1-lakeview-inn.mp31.9 MB",
+      "call-1-lakeview-inn-transcript.txt812 B",
+      "call-2-budget-motel.mp33.4 MB",
     ]);
     // Names only: nothing to download, since the bytes aren't stored.
     expect(within(section).queryByRole("link")).not.toBeInTheDocument();
