@@ -6,8 +6,9 @@ import { expect, test, type Page } from "@playwright/test";
  *   SSE GET /api/tasks/{id}/events (event "progress"); GET /api/municipalities?q=;
  *   ProblemDetail 400/422 on invalid input.
  *
- * Marked test.fixme until the backend and frontend phase 2 PRs are merged. Labels and
- * button names are matched with case-insensitive patterns; tighten them once the UI lands.
+ * UI specs, marked test.fixme: the search form is being replaced by a chat UI backed by
+ * POST /api/tasks/prompt; they will be rewritten against its labels when it lands.
+ * API-level checks of the same flow run in tasks-api.spec.ts.
  */
 
 /** ISO date (yyyy-mm-dd) `days` from today. */
@@ -91,26 +92,5 @@ test.describe("enquiry flow", () => {
     // The user stays on the form and sees why.
     await expect(page).not.toHaveURL(/\/task/);
     await expect(page.getByRole("alert").first()).toContainText(/ontario/i);
-  });
-
-  test.fixme("API rejects Vancouver with a ProblemDetail 422", async ({ request }) => {
-    const response = await request.post("/api/tasks", {
-      data: {
-        city: "Vancouver",
-        checkIn: CHECK_IN,
-        checkOut: CHECK_OUT,
-        rooms: 1,
-        adults: 2,
-        children: 0,
-        destinationEmail: EMAIL,
-        deadline: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-        authorizationMode: "ENQUIRY_ONLY",
-        requestId: crypto.randomUUID(),
-      },
-    });
-    expect(response.status()).toBe(422);
-    const problem = await response.json();
-    expect(problem).toMatchObject({ status: 422 });
-    expect(problem.title ?? problem.detail).toBeTruthy();
   });
 });

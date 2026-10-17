@@ -9,6 +9,9 @@ const backendUrl = (process.env.BACKEND_URL ?? "http://localhost:8080").replace(
 export default function nextConfig(phase: string): NextConfig {
   if (phase === PHASE_DEVELOPMENT_SERVER) {
     return {
+      // The dev server gzips proxied responses, which buffers the SSE progress stream
+      // (/api/tasks/{id}/events) until it ends. Compression is pointless on localhost anyway.
+      compress: false,
       async rewrites() {
         return [{ source: "/api/:path*", destination: `${backendUrl}/api/:path*` }];
       },

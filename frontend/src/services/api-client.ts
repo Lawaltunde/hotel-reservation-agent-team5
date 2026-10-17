@@ -1,24 +1,59 @@
 import type { HealthStatus } from "@/models/health";
+import type { FieldError, ProblemDetail } from "@/models/problem-detail";
+import { isProblemDetail } from "@/models/problem-detail";
 
 /**
- * All backend calls go through the same-origin `/api` prefix. Next.js rewrites
- * it to `${BACKEND_URL}/api` (see next.config.ts), so the browser never needs
- * to know where the backend lives.
+ * All backend calls go through the same-origin `/api` prefix. In production the Spring Boot
+ * app serves both the UI and `/api`; under `npm run dev`, Next.js proxies `/api` to
+ * `BACKEND_URL` (see next.config.ts).
  */
-const API_BASE = "/api";
+export const API_BASE = "/api";
 
-const DEFAULT_TIMEOUT_MS = 5000;
+const DEFAULT_TIMEOUT_MS = 10_000;
 
-/** Raised for any failed backend call: network error, timeout, non-2xx or bad JSON. */
+/**
+ * Raised for any failed backend call: network error, timeout, non-2xx or bad JSON.
+ * For error responses, `problem` holds the parsed RFC 9457 body when there is one.
+ */
 export class ApiError extends Error {
   constructor(
     message: string,
     /** HTTP status, or undefined when no response was received. */
     readonly status?: number,
+    /** Parsed problem details from the response body, if any. */
+    readonly problem?: ProblemDetail,
   ) {
     super(message);
     this.name = "ApiError";
   }
+
+  /** True when no HTTP response arrived (offline, refused, timed out). */
+  get isNetworkError(): boolean {
+    return this.status === undefined;
+  }
+
+  /** Validation errors from a 400 response, normalised to `{field, message}`. */
+  get errors(): FieldError[] {
+    const raw: unknown = this.problem?.errors;
+    if (!Array.isArray(raw)) return [];
+    return raw.flatMap((e): FieldError[] => {
+      if (typeof e === "string") return [{ field: null, message: e }];
+      if (typeof e === "object" && e !== null && typeof (e as FieldError).message === "string") {
+        const { field, message } = e as FieldError;
+        return [{ field: typeof field === "string" ? field : null, message }];
+      }
+      return [];
+    });
+  }
+
+  /** Suggested Ontario municipalities from a 422 response. */
+  get suggestions(): string[] {
+    return stringArray(this.problem?.suggestions);
+  }
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
 }
 
 export interface RequestOptions extends Omit<RequestInit, "body"> {
@@ -43,7 +78,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     response = await fetch(`${API_BASE}${path}`, {
       ...init,
       headers: {
-        Accept: "application/json",
+        Accept: "application/json, application/problem+json",
         ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
         ...headers,
       },
@@ -52,6 +87,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       cache: "no-store",
     });
   } catch (error) {
+    if (signal?.aborted) throw error; // caller cancelled: let them see the AbortError
     if (timeoutSignal.aborted) {
       throw new ApiError(`Request to ${path} timed out after ${timeoutMs} ms`);
     }
@@ -60,15 +96,36 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     );
   }
 
+  const text = await response.text().catch(() => "");
+
   if (!response.ok) {
-    throw new ApiError(`Request to ${path} returned HTTP ${response.status}`, response.status);
+    const problem = parseProblem(text);
+    const message =
+      problem?.detail ?? problem?.title ?? `Request to ${path} returned HTTP ${response.status}`;
+    throw new ApiError(message, response.status, problem);
   }
 
+  if (text === "") return undefined as T;
   try {
-    return (await response.json()) as T;
+    return JSON.parse(text) as T;
   } catch {
     throw new ApiError(`Response from ${path} was not valid JSON`, response.status);
   }
+}
+
+function parseProblem(text: string): ProblemDetail | undefined {
+  if (!text) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return isProblemDetail(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** True when the error came from an aborted request (component unmounted, newer search). */
+export function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
 }
 
 /** `GET /api/health`: reports whether the backend is up. */
