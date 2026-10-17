@@ -31,6 +31,7 @@ public record TaskResponse(
         int callsPlaced,
         OfferResponse bestOffer,
         List<OfferResponse> offers,
+        ReportResponse report,
         Instant createdAt,
         Instant updatedAt
 ) {
@@ -57,6 +58,7 @@ public record TaskResponse(
                 snapshot.offers().stream()
                         .map(o -> OfferResponse.from(o, snapshot.hotels().get(o.hotelId())))
                         .toList(),
+                ReportResponse.from(snapshot.report(), snapshot.delivery()),
                 t.createdAt(),
                 t.updatedAt());
     }

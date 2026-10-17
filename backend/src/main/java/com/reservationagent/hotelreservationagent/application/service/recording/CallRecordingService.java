@@ -51,23 +51,28 @@ public class CallRecordingService implements OpenCallRecordingUseCase {
         this.linkLifetime = linkLifetime;
     }
 
+    /** A link to a call's audio, or why there is none. */
+    public record IssuedLink(String url, String text) {
+    }
+
     /**
-     * The text for the report's recording line: a new link, or why there is none. No link is issued
-     * without a public base URL, because a localhost link is useless to the reader.
+     * Issues a new link for the call's audio. No link is issued without a public base URL, because a
+     * localhost link is useless to the reader; {@code text} then says why.
      */
-    public String linkTextFor(PhoneCall call) {
+    public IssuedLink issueFor(PhoneCall call) {
         if (call == null || call.conversationId() == null) {
-            return "No call recording";
+            return new IssuedLink(null, "No call recording");
         }
         if (publicBaseUrl.isEmpty()) {
-            return "Recording link unavailable (no public URL configured)";
+            return new IssuedLink(null, "Recording link unavailable (no public URL configured)");
         }
         byte[] bytes = new byte[TOKEN_BYTES];
         random.nextBytes(bytes);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         Instant now = clock.instant();
         links.save(new RecordingLink(hash(token), call.id(), call.conversationId(), now.plus(linkLifetime), now));
-        return publicBaseUrl + PATH + token;
+        String url = publicBaseUrl + PATH + token;
+        return new IssuedLink(url, url);
     }
 
     @Override

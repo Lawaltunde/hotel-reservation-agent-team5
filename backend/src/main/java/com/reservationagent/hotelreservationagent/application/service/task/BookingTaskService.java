@@ -3,6 +3,8 @@ package com.reservationagent.hotelreservationagent.application.service.task;
 import com.reservationagent.hotelreservationagent.application.port.in.GetBookingTaskUseCase;
 import com.reservationagent.hotelreservationagent.application.port.in.SubmitBookingTaskUseCase;
 import com.reservationagent.hotelreservationagent.application.port.out.BookingTaskRepository;
+import com.reservationagent.hotelreservationagent.application.port.out.EmailDeliveryRepository;
+import com.reservationagent.hotelreservationagent.application.port.out.ReportRepository;
 import com.reservationagent.hotelreservationagent.application.port.out.HotelCandidateRepository;
 import com.reservationagent.hotelreservationagent.application.port.out.HotelIndex;
 import com.reservationagent.hotelreservationagent.application.port.out.MunicipalityRepository;
@@ -48,11 +50,16 @@ public class BookingTaskService implements SubmitBookingTaskUseCase, GetBookingT
     private final OfferEvaluator offerEvaluator;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+    private final ReportRepository reports;
+    private final EmailDeliveryRepository deliveries;
 
     public BookingTaskService(BookingRequestValidator validator, BookingTaskRepository tasks,
                               MunicipalityRepository municipalities, HotelCandidateRepository candidates,
                               PhoneCallRepository calls, OfferRepository offers, ReservationRepository reservations,
-                              HotelIndex hotelIndex, OfferEvaluator offerEvaluator, ApplicationEventPublisher events, Clock clock) {
+                              HotelIndex hotelIndex, OfferEvaluator offerEvaluator, ApplicationEventPublisher events, Clock clock,
+                              ReportRepository reports, EmailDeliveryRepository deliveries) {
+        this.reports = reports;
+        this.deliveries = deliveries;
         this.validator = validator;
         this.tasks = tasks;
         this.municipalities = municipalities;
@@ -114,7 +121,9 @@ public class BookingTaskService implements SubmitBookingTaskUseCase, GetBookingT
                     taskOffers,
                     offerEvaluator.best(task, taskOffers).orElse(null),
                     reservations.findByTask(taskId).orElse(null),
-                    offerHotels);
+                    offerHotels,
+                    reports.findByTask(taskId).orElse(null),
+                    deliveries.findLatestByTask(taskId).orElse(null));
         });
     }
 }
