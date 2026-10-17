@@ -77,6 +77,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webclient</artifactId>
         </dependency>
+        <!-- SMTP transport for the report email (app.email.transport=smtp) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
         <!-- Spring AI: structured offer extraction from call transcripts (OpenAI) -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
