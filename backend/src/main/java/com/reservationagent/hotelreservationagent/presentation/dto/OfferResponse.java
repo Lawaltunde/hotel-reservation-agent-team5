@@ -3,6 +3,7 @@ package com.reservationagent.hotelreservationagent.presentation.dto;
 import com.reservationagent.hotelreservationagent.domain.hotel.Hotel;
 import com.reservationagent.hotelreservationagent.domain.offer.EvidenceStatus;
 import com.reservationagent.hotelreservationagent.domain.offer.HotelOffer;
+import com.reservationagent.hotelreservationagent.domain.offer.OfferPrice;
 import com.reservationagent.hotelreservationagent.domain.offer.PriceBreakdown;
 import com.reservationagent.hotelreservationagent.domain.offer.TaxInclusion;
 import com.reservationagent.hotelreservationagent.domain.shared.Money;
@@ -16,7 +17,9 @@ import java.util.UUID;
  * mandatory fees when all are known, otherwise the hotel's stated {@code allInTotal} if it includes
  * taxes, otherwise {@code null}. {@code totalsDisagree} is true when that sum and the stated
  * all-in total differ by more than CA$1. {@code enquiryId} is a hotel reference, never a booking
- * confirmation. {@code quoteValidUntil} is computed from the call end and the validity period the
+ * confirmation. {@code price} is the ranking price: {@code negotiatedTotal} when known, else (with
+ * {@code estimated=true}, {@code priceBasis=ESTIMATED_HST}) a pre-tax charge plus HST with the municipal
+ * accommodation tax not confirmed; never present it as a stated total. {@code quoteValidUntil} is computed from the call end and the validity period the
  * hotel stated ({@code null} if none); {@code quoteValidityText} is the hotel's words, verbatim.
  */
 public record OfferResponse(
@@ -36,6 +39,9 @@ public record OfferResponse(
         BigDecimal allInTotal,
         TaxInclusion taxInclusion,
         boolean totalsDisagree,
+        BigDecimal price,
+        boolean estimated,
+        OfferPrice.PriceBasis priceBasis,
         String cancellationTerms,
         String depositTerms,
         String enquiryId,
@@ -63,6 +69,9 @@ public record OfferResponse(
                 amount(p.allInTotal()),
                 p.taxInclusion(),
                 p.totalsDisagree(),
+                p.price().map(x -> x.amount().amount()).orElse(null),
+                p.price().map(OfferPrice::estimated).orElse(false),
+                p.price().map(OfferPrice::basis).orElse(null),
                 offer.cancellationTerms(),
                 offer.depositTerms(),
                 offer.enquiryId(),
