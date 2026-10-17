@@ -16,6 +16,7 @@ import com.reservationagent.hotelreservationagent.domain.task.TaskOutcome;
 import com.reservationagent.hotelreservationagent.domain.transcript.Transcript;
 import com.reservationagent.hotelreservationagent.domain.transcript.TranscriptTurn;
 import com.reservationagent.hotelreservationagent.domain.task.TaskIntake;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -47,13 +48,29 @@ public class ReportComposer {
     private final OfferEvaluator evaluator;
     private final String from;
     private final Clock clock;
+    private final String signOff;
 
+    public static final String DEFAULT_TEAM_NAME = "Team 5";
+    public static final String DEFAULT_TEAM_MEMBERS = "Hammed Lawal <lawalolatunde14@gmail.com>, "
+            + "Julia Bougaev <janojuly@gmail.com>, Aakash Uma Maheswaran <aakash.maheswaran@gmail.com>";
+
+    /** With the default team sign-off. */
+    public ReportComposer(String subject, String subjectUnconfirmed, String reportRecipient, String from,
+                          OfferEvaluator evaluator, Clock clock) {
+        this(subject, subjectUnconfirmed, reportRecipient, from, DEFAULT_TEAM_NAME, DEFAULT_TEAM_MEMBERS, evaluator, clock);
+    }
+
+    @Autowired
     public ReportComposer(@Value("${app.report.subject:" + DEFAULT_SUBJECT + "}") String subject,
                           @Value("${app.report.subject-unconfirmed:" + DEFAULT_SUBJECT_UNCONFIRMED + "}") String subjectUnconfirmed,
                           @Value("${app.report.recipient:}") String reportRecipient,
                           @Value("${hotel-agent.resend.from:}") String from,
+                          @Value("${app.report.team-name:" + DEFAULT_TEAM_NAME + "}") String teamName,
+                          @Value("${app.report.team-members:" + DEFAULT_TEAM_MEMBERS + "}") String teamMembers,
                           OfferEvaluator evaluator,
                           Clock clock) {
+        // A blank env var (copied .env.example) means "use the defaults", like the other report settings.
+        this.signOff = signOff(teamName, teamMembers == null || teamMembers.isBlank() ? DEFAULT_TEAM_MEMBERS : teamMembers);
         this.subject = subject;
         this.subjectUnconfirmed = subjectUnconfirmed;
         this.evaluator = evaluator;
@@ -150,7 +167,7 @@ public class ReportComposer {
             b.append("Conversation: ").append(e.conversationUrl() == null ? "Unavailable" : e.conversationUrl()).append('\n');
             b.append(e.text()).append('\n');
         }
-        b.append("\nHotel data: Google Places, OpenStreetMap contributors.\n\nHotel Deal Agent (Team 5)\n");
+        b.append("\nHotel data: Google Places, OpenStreetMap contributors.\n\n").append(signOff);
 
         Recipients recipients = recipients(t);
         String body = b.toString();
@@ -185,12 +202,38 @@ public class ReportComposer {
         if (in.bestOffer() != null) {
             body.append("Price for the stay: ").append(priceText(evaluator.price(in.bestOffer()).orElse(null))).append('\n');
         }
-        body.append("\nSome report details could not be produced. No booking, reservation, hold or payment was made.\n");
+        body.append("\nSome report details could not be produced. No booking, reservation, hold or payment was made.\n\n")
+                .append(signOff);
         Recipients recipients = recipients(t);
         Email email = new Email(recipients.to(), recipients.cc(), subject(false), body.toString(), List.of());
         SentReport report = new SentReport(subject(false), from, recipients.to(), recipients.cc(), body.toString(), null,
                 null, null, List.of(), clock.instant());
         return new Composed(email, report);
+    }
+
+    /**
+     * The closing block: a dash line, the team name, then one line per member, "Name — email" or just
+     * "Name". {@code members} is comma-separated "Name &lt;email&gt;" or "Name".
+     */
+    static String signOff(String teamName, String members) {
+        StringBuilder s = new StringBuilder("—\n")
+                .append(teamName == null || teamName.isBlank() ? DEFAULT_TEAM_NAME : teamName.strip()).append('\n');
+        if (members != null) {
+            for (String member : members.split(",")) {
+                String m = member.strip();
+                if (m.isEmpty()) continue;
+                int lt = m.indexOf('<');
+                int gt = m.indexOf('>', lt + 1);
+                if (lt >= 0 && gt > lt) {
+                    String name = m.substring(0, lt).strip();
+                    String email = m.substring(lt + 1, gt).strip();
+                    s.append(name.isEmpty() ? email : email.isEmpty() ? name : name + " — " + email).append('\n');
+                } else {
+                    s.append(m).append('\n');
+                }
+            }
+        }
+        return s.toString();
     }
 
     /**

@@ -157,4 +157,33 @@ class ReportComposerTest {
         assertThat(composed.email().cc()).isEmpty();
         assertThat(composed.email().textBody()).contains("No call transcripts.");
     }
+
+    @Test
+    void everyReportEndsWithTheTeamSignOff() {
+        Composed composed = composer.compose(input(TaskOutcome.NO_ELIGIBLE_HOTELS, null, null),
+                new ReportContext(List.of(), USAGE));
+        Composed fallback = composer.fallback(input(TaskOutcome.NO_ELIGIBLE_HOTELS, null, null));
+        String expected = """
+                —
+                Team 5
+                Hammed Lawal — lawalolatunde14@gmail.com
+                Julia Bougaev — janojuly@gmail.com
+                Aakash Uma Maheswaran — aakash.maheswaran@gmail.com
+                """;
+
+        assertThat(composed.email().textBody()).endsWith(expected);
+        assertThat(composed.report().bodyText()).endsWith(expected);
+        assertThat(fallback.email().textBody()).endsWith(expected);
+        assertThat(fallback.report().bodyText()).endsWith(expected);
+    }
+
+    @Test
+    void aMemberWithoutAnEmailIsListedByName() {
+        ReportComposer custom = new ReportComposer(SUBJECT, UNCONFIRMED, "", null, "Team Five",
+                "Ada Lovelace <ada@example.com>, Grace Hopper", EVALUATOR, CLOCK);
+        String body = custom.compose(input(TaskOutcome.NO_ELIGIBLE_HOTELS, null, null),
+                new ReportContext(List.of(), USAGE)).email().textBody();
+
+        assertThat(body).endsWith("—\nTeam Five\nAda Lovelace — ada@example.com\nGrace Hopper\n");
+    }
 }
