@@ -299,6 +299,64 @@ class TaskControllerTest {
                 .andExpect(jsonPath("$.suggestions").value(org.hamcrest.Matchers.contains("Springwater", "Springfield")));
     }
 
+    // ---------- POST /api/tasks/prompt ----------
+
+    @Test
+    void promptIsStrippedAndPassedWithTheIdempotencyKey() throws Exception {
+        BookingTask task = withStatus(task(), TaskStatus.VALIDATING, null);
+        when(submitPrompt.submit(any(), any())).thenReturn(task.id());
+        when(getTask.get(task.id())).thenReturn(Optional.of(snapshot(task)));
+
+        mvc.perform(post("/api/tasks/prompt").contentType(MediaType.APPLICATION_JSON)
+                        .header("Idempotency-Key", "chat-42")
+                        .content("{\"prompt\": \"  cheapest hotel in Ottawa tonight, a@example.com  \"}"))
+                .andExpect(status().isAccepted())
+                .andExpect(header().string("Location", "/api/tasks/" + task.id()))
+                .andExpect(jsonPath("$.taskId").value(task.id().toString()));
+
+        verify(submitPrompt).submit("cheapest hotel in Ottawa tonight, a@example.com", "chat-42");
+        verifyNoInteractions(submit);
+    }
+
+    @Test
+    void blankPromptIs400OnThePromptField() throws Exception {
+        mvc.perform(post("/api/tasks/prompt").contentType(MediaType.APPLICATION_JSON).content("{\"prompt\": \"  \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.errors[0].field").value("prompt"))
+                .andExpect(jsonPath("$.errors[0].message").value("Describe the stay you want, including your email address"));
+        verifyNoInteractions(submitPrompt);
+    }
+
+    @Test
+    void overlongPromptIs400() throws Exception {
+        mvc.perform(post("/api/tasks/prompt").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"prompt\": \"" + "x".repeat(2001) + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("prompt"));
+    }
+
+    @Test
+    void unavailableInterpreterIs503() throws Exception {
+        when(submitPrompt.submit(any(), any())).thenThrow(new com.reservationagent.hotelreservationagent.application.port.out.TaskPromptInterpreter.InterpreterUnavailableException("OpenAI down", null));
+
+        mvc.perform(post("/api/tasks/prompt").contentType(MediaType.APPLICATION_JSON).content("{\"prompt\": \"Ottawa\"}"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Request reader unavailable"))
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("OpenAI"))));
+    }
+
+    @Test
+    void promptValidationErrorsKeepTheirFields() throws Exception {
+        when(submitPrompt.submit(any(), any())).thenThrow(new RequestValidationException(List.of(
+                new RequestValidationException.FieldError("email", "Include the email address the result should be sent to"))));
+
+        mvc.perform(post("/api/tasks/prompt").contentType(MediaType.APPLICATION_JSON).content("{\"prompt\": \"Ottawa\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(errors("email: Include the email address the result should be sent to"));
+    }
+
     // ---------- GET /api/tasks/{id} ----------
 
     @Test
