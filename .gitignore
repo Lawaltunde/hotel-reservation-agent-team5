@@ -19,3 +19,9 @@ node_modules/
 
 # Frontend build tooling downloaded by Maven
 frontend/node/
+
+# Playwright E2E
+e2e/node_modules/
+e2e/test-results/
+e2e/playwright-report/
+e2e/blob-report/
