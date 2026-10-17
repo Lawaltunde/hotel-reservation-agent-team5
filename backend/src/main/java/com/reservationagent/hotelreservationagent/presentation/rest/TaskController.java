@@ -21,6 +21,13 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.UUID;
+import com.reservationagent.hotelreservationagent.domain.task.TaskStatus;
+import org.springframework.beans.factory.annotation.Value;
+import java.util.function.Consumer;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,9 +55,18 @@ public class TaskController {
     private final SubmitTaskPromptUseCase submitPrompt;
     private final GetBookingTaskUseCase getTask;
     private final SubscribeTaskProgressUseCase progress;
+    private final Duration heartbeatInterval;
+    /** One daemon thread sends every stream's heartbeat; each tick is a single read and a tiny write. */
+    private static final ScheduledExecutorService HEARTBEATS = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "sse-heartbeat");
+        t.setDaemon(true);
+        return t;
+    });
 
     public TaskController(SubmitBookingTaskUseCase submitTask, SubmitTaskPromptUseCase submitPrompt,
-                          GetBookingTaskUseCase getTask, SubscribeTaskProgressUseCase progress) {
+                          GetBookingTaskUseCase getTask, SubscribeTaskProgressUseCase progress,
+                          @Value("${app.sse.heartbeat:15s}") Duration heartbeatInterval) {
+        this.heartbeatInterval = heartbeatInterval;
         this.submitTask = submitTask;
         this.submitPrompt = submitPrompt;
         this.getTask = getTask;
@@ -111,7 +127,12 @@ public class TaskController {
         BookingTask initial = snapshot(id).task();
         SseEmitter emitter = new SseEmitter(MAX_STREAM.toMillis());
         AtomicReference<AutoCloseable> subscription = new AtomicReference<>();
+        AtomicReference<ScheduledFuture<?>> heartbeat = new AtomicReference<>();
         Runnable unsubscribe = () -> {
+            ScheduledFuture<?> beat = heartbeat.getAndSet(null);
+            if (beat != null) {
+                beat.cancel(false);
+            }
             AutoCloseable handle = subscription.getAndSet(null);
             if (handle != null) {
                 try {
@@ -126,34 +147,85 @@ public class TaskController {
         emitter.onError(e -> unsubscribe.run());
 
         // Subscribe before reading the current status so no transition is missed in between. Live
-        // events that arrive before the initial event is sent are held back, then only those newer
-        // than the snapshot are forwarded, so the client never sees a status go backwards.
+        // events that arrive before the initial event is sent are held back; afterwards only events
+        // newer than the last one sent are forwarded, so the client never sees a status go backwards.
         Object lock = new Object();
         List<TaskProgressEvent> pending = new ArrayList<>();
-        AtomicReference<BookingTask> sentSnapshot = new AtomicReference<>();
+        AtomicReference<TaskProgressEvent> lastSent = new AtomicReference<>();
+        Consumer<TaskProgressEvent> forward = event -> {
+            if (isNewer(event, lastSent.get())) {
+                lastSent.set(event);
+                send(emitter, event, unsubscribe);
+            }
+        };
         subscription.set(progress.subscribe(id, event -> {
             synchronized (lock) {
-                BookingTask snapshot = sentSnapshot.get();
-                if (snapshot == null) {
+                if (lastSent.get() == null) {
                     pending.add(event);
-                } else if (isNewer(event, snapshot)) {
-                    send(emitter, event, unsubscribe);
+                } else {
+                    forward.accept(event);
                 }
             }
         }));
         synchronized (lock) {
             BookingTask current = getTask.get(id).map(TaskSnapshot::task).orElse(initial);
-            sentSnapshot.set(current);
-            send(emitter, new TaskProgressEvent(id, current.status(), "Current status", current.updatedAt()), unsubscribe);
-            pending.stream().filter(e -> isNewer(e, current)).forEach(e -> send(emitter, e, unsubscribe));
+            TaskProgressEvent first = new TaskProgressEvent(id, current.status(), describe(current.status()),
+                    current.updatedAt());
+            lastSent.set(first);
+            send(emitter, first, unsubscribe);
+            pending.forEach(forward);
             pending.clear();
+        }
+        // Safety net and keep-alive: every heartbeat, re-read the task. A transition whose live event
+        // was missed is sent (and a terminal one completes the stream); otherwise a comment keeps
+        // proxies from closing an idle stream and detects clients that went away.
+        if (!lastSent.get().status().isTerminal()) {
+            heartbeat.set(HEARTBEATS.scheduleAtFixedRate(() -> {
+                synchronized (lock) {
+                    try {
+                        BookingTask now = getTask.get(id).map(TaskSnapshot::task).orElse(null);
+                        if (now != null && now.status() != lastSent.get().status()) {
+                            forward.accept(new TaskProgressEvent(id, now.status(), describe(now.status()), now.updatedAt()));
+                        } else {
+                            emitter.send(SseEmitter.event().comment("keep-alive"));
+                        }
+                    } catch (IOException | IllegalStateException e) {
+                        unsubscribe.run();
+                    } catch (RuntimeException e) {
+                        log.debug("task={} heartbeat failed: {}", id, e.getMessage());
+                    }
+                }
+            }, heartbeatInterval.toMillis(), heartbeatInterval.toMillis(), TimeUnit.MILLISECONDS));
         }
         return emitter;
     }
 
-    /** Events are stamped with the task's persisted updatedAt, so older or equal ones are already reflected. */
-    private static boolean isNewer(TaskProgressEvent event, BookingTask snapshot) {
-        return event.status() != snapshot.status() && !event.at().isBefore(snapshot.updatedAt());
+    /** Newer = a different status, not older than the last event sent (events carry the persisted updatedAt). */
+    private static boolean isNewer(TaskProgressEvent event, TaskProgressEvent last) {
+        return last == null || (event.status() != last.status() && !event.at().isBefore(last.at()));
+    }
+
+    /** What a status means, for the event sent on connect and for transitions found by the heartbeat. */
+    static String describe(TaskStatus status) {
+        return switch (status) {
+            case RECEIVED -> "Request received";
+            case VALIDATING -> "Checking the request";
+            case DISCOVERING -> "Searching for hotels";
+            case RANKING -> "Ranking hotels to call";
+            case CALLING_FOR_QUOTES -> "Calling hotels for availability and prices";
+            case OFFER_SELECTED -> "Cheapest confirmed option selected";
+            case BOOKING, VERIFYING -> "Booking in progress";
+            case EMAIL_PENDING -> "Sending the report email";
+            case COMPLETED -> "Report email sent";
+            case INVALID_REQUEST -> "The request could not be used";
+            case OUT_OF_SCOPE_LOCATION -> "The location is outside Ontario";
+            case NO_CANDIDATES -> "No callable hotels found";
+            case NO_VALID_OFFER -> "No confirmed available offer";
+            case BOOKING_UNCERTAIN -> "Booking status uncertain";
+            case BOOKING_FAILED -> "Booking failed";
+            case EMAIL_FAILED -> "The report email could not be sent";
+            case DEADLINE_EXCEEDED -> "Deadline exceeded";
+        };
     }
 
     private static void send(SseEmitter emitter, TaskProgressEvent event, Runnable unsubscribe) {
