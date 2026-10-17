@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class OfferEvaluatorTest {
 
-    private final OfferEvaluator evaluator = new OfferEvaluator(CLOCK);
+    private final OfferEvaluator evaluator = new OfferEvaluator(CLOCK, new java.math.BigDecimal("0.06"));
     private final BookingTask task = task();
 
     /** comparable total = 200 + 26 + 8 + fees */
@@ -113,5 +113,36 @@ class OfferEvaluatorTest {
     @Test
     void noOffersMeansNoWinner() {
         assertThat(evaluator.best(task, List.of())).isEmpty();
+    }
+
+    /** Tier B: a pre-tax room charge with no MAT stated, estimated with 13% HST. */
+    private HotelOffer estimated(String roomSubtotal, int receivedSecondsAfterNow) {
+        return offer(task, UUID.randomUUID(), new com.reservationagent.hotelreservationagent.domain.offer.PriceBreakdown(
+                Money.cad(roomSubtotal), null, null, null, null, null,
+                com.reservationagent.hotelreservationagent.domain.offer.TaxInclusion.EXCLUDED),
+                NOW.plusSeconds(receivedSecondsAfterNow));
+    }
+
+    @Test
+    void anHstEstimateCompetesAndIsFlagged() {
+        HotelOffer b = estimated("100.00", 0); // ≈ 113.00
+        assertThat(evaluator.isComparable(task, b)).isTrue();
+        assertThat(evaluator.price(b).orElseThrow().estimated()).isTrue();
+        assertThat(evaluator.price(b).orElseThrow().amount()).isEqualTo(Money.cad("113.00"));
+        assertThat(evaluator.best(task, List.of(b, offerTotalling("100.00", 0)))).contains(b); // A = 334.00
+    }
+
+    @Test
+    void anEstimateThatWinsByLessThanTheMarginGivesWayToAFirmTotal() {
+        HotelOffer b = estimated("200.00", 0);         // ≈ 226.00
+        HotelOffer a = offerTotalling("5.00", 1);       // 239.00, within 6% of 226.00 (239.56)
+        assertThat(evaluator.best(task, List.of(b, a))).contains(a);
+    }
+
+    @Test
+    void anEstimateThatWinsByMoreThanTheMarginStillWins() {
+        HotelOffer b = estimated("200.00", 0);         // ≈ 226.00
+        HotelOffer a = offerTotalling("10.00", 1);      // 244.00, more than 6% above 226.00
+        assertThat(evaluator.best(task, List.of(b, a))).contains(b);
     }
 }

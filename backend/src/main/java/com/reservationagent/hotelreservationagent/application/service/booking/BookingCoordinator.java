@@ -39,7 +39,9 @@ public class BookingCoordinator {
         if (!task.authorizationMode().allowsBooking()) {
             return Optional.empty();
         }
-        if (!evaluator.isComparable(task, offer) || !evaluator.isWithinBudget(task, offer)) {
+        // Booking needs a firm all-in total, never an estimate.
+        if (!evaluator.isComparable(task, offer) || !evaluator.isWithinBudget(task, offer)
+                || offer.negotiated().comparableTotal().isEmpty()) {
             return Optional.empty();
         }
         Reservation attempt = new Reservation(UUID.randomUUID(), task.id(), offer.hotelId(), offer.id(), null,
