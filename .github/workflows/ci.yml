@@ -81,3 +81,107 @@ jobs:
         if: hashFiles('frontend/package.json') != ''
         working-directory: frontend
         run: npm run build
+
+  e2e:
+    # Builds the single jar and drives it with Playwright, against a real PostGIS service.
+    # Builds its own jar (tests skipped) so it runs in parallel with the full build.
+    name: E2E (Playwright vs packaged jar)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: imresamu/postgis:17-3.5
+        env:
+          POSTGRES_DB: hotelagent
+          POSTGRES_USER: hotelagent
+          POSTGRES_PASSWORD: hotelagent
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hotelagent -d hotelagent"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      E2E_BASE_URL: http://localhost:8080
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Package jar (UI + API)
+        run: ./mvnw -B -DskipTests package
+
+      - name: Start app
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/hotelagent
+          SPRING_DATASOURCE_USERNAME: hotelagent
+          SPRING_DATASOURCE_PASSWORD: hotelagent
+          SPRING_DOCKER_COMPOSE_ENABLED: 'false'
+        run: |
+          JAR=""
+          for f in backend/target/hotel-reservation-agent-*.jar; do
+            case "$f" in *-plain.jar) ;; *) JAR="$f" ;; esac
+          done
+          [ -n "$JAR" ] || { echo "No jar in backend/target"; exit 1; }
+          echo "Starting $JAR"
+          nohup java -jar "$JAR" > app.log 2>&1 &
+          echo $! > app.pid
+
+      - name: Wait for /actuator/health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
+              echo "App is UP after ~$((i * 2))s"; exit 0
+            fi
+            if ! kill -0 "$(cat app.pid)" 2>/dev/null; then
+              echo "App process exited"; cat app.log; exit 1
+            fi
+            sleep 2
+          done
+          echo "App did not become healthy in 120s"; tail -n 200 app.log; exit 1
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install E2E dependencies
+        working-directory: e2e
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Typecheck specs
+        working-directory: e2e
+        run: npm run typecheck
+
+      - name: Run Playwright
+        working-directory: e2e
+        run: npx playwright test
+
+      - name: Stop app
+        if: always()
+        run: |
+          if [ -f app.pid ]; then kill "$(cat app.pid)" 2>/dev/null || true; fi
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+            app.log
+          retention-days: 14
+          if-no-files-found: ignore
