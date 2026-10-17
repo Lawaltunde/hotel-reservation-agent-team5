@@ -11,7 +11,7 @@ const mono = Atkinson_Hyperlegible_Mono({ subsets: ["latin"], variable: "--font-
 
 export const metadata: Metadata = {
   title: "Hotel Deal Agent",
-  description: "Describe your stay once; an agent phones Ontario hotels and emails you the cheapest confirmed-available price.",
+  description: "Describe your stay once; an agent phones hotels across Canada and emails you the cheapest confirmed-available price.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

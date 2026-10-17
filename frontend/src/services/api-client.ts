@@ -48,7 +48,7 @@ export class ApiError extends Error {
     });
   }
 
-  /** Suggested Ontario municipalities from a 422 response. */
+  /** Suggested Canadian cities from a 422 response. */
   get suggestions(): string[] {
     return stringArray(this.problem?.suggestions);
   }

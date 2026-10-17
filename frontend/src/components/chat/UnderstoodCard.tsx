@@ -47,6 +47,7 @@ export function UnderstoodCard({ task }: { task: Task }) {
   const askedCount = (field: "rooms" | "adults" | "children") => (typeof asked[field] === "number" ? (asked[field] as number) : null);
 
   const city = r?.city ?? task.city;
+  const region = r?.provinceName?.trim() || r?.province?.trim() || null;
   const checkIn = date("checkIn");
   const checkOut = date("checkOut");
   const nights = nightsBetween(checkIn, checkOut);
@@ -94,7 +95,7 @@ export function UnderstoodCard({ task }: { task: Task }) {
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1 border-b border-dashed border-line px-4 pt-4 pb-3">
         <p className="font-display text-2xl leading-tight text-ink">
           {city ?? NOT_GIVEN}
-          <span className="text-muted">, Ontario</span>
+          {region && <span className="text-muted">, {region}</span>}
         </p>
         <p className="font-mono text-sm text-pine">
           {nights ? plural(nights, "night", "nights") : askedNights ? `Asking for ${plural(askedNights, "night", "nights")}` : "Nights not specified"}

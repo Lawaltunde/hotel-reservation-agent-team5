@@ -1,6 +1,6 @@
 /**
  * RFC 9457 problem details, as returned by the backend for every error.
- * 400 adds `errors`; 422 (city outside Ontario or ambiguous) adds `suggestions`.
+ * 400 adds `errors`; 422 (place outside Canada or ambiguous) adds `suggestions`.
  */
 /** One entry of a 400 `errors` array. `field` names the request field, e.g. `city` or `email`. */
 export interface FieldError {
@@ -16,7 +16,7 @@ export interface ProblemDetail {
   instance?: string;
   /** 400: what is missing or invalid, e.g. `{field: "email", message: "..."}`. Plain strings are also accepted. */
   errors?: Array<FieldError | string>;
-  /** 422: Ontario municipalities the user may have meant. */
+  /** 422: Canadian cities the user may have meant. */
   suggestions?: string[];
   [extension: string]: unknown;
 }

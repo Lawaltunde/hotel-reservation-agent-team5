@@ -66,7 +66,7 @@ export function rankingPrice(offer: Pick<Offer, "price" | "estimated" | "negotia
 }
 
 /** The wording used everywhere an estimated price appears. */
-export const ESTIMATE_NOTE = "incl. HST; municipal accommodation tax not confirmed";
+export const ESTIMATE_NOTE = "incl. estimated sales tax; accommodation levies not confirmed";
 
 /** A file size such as "412 KB" or "3.4 MB", or null when unknown. */
 export function formatBytes(bytes: number | null | undefined): string | null {
@@ -102,7 +102,7 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
   EMAIL_PENDING: "Emailing your report",
   COMPLETED: "Done",
   INVALID_REQUEST: "The request was invalid",
-  OUT_OF_SCOPE_LOCATION: "City is outside Ontario",
+  OUT_OF_SCOPE_LOCATION: "Place is outside Canada",
   NO_CANDIDATES: "No suitable hotels found",
   NO_VALID_OFFER: "No usable quote received",
   BOOKING_UNCERTAIN: "Booking status uncertain",

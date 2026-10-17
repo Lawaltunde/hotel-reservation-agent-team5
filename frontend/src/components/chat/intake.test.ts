@@ -60,7 +60,7 @@ describe("followUpForErrors", () => {
       followUpForErrors([{ field: "email", message: "Include the email address the result should be sent to" }], "Ottawa"),
     ).toEqual({ text: "Thanks. What email address should I send the results to?" });
     expect(followUpForErrors([{ field: "city", message: "City is required" }], "").text).toBe(
-      "Thanks. Which Ontario city would you like to stay in?",
+      "Thanks. Which city would you like to stay in?",
     );
     expect(followUpForErrors([{ field: "checkIn", message: "Check-in date is required" }], "").text).toBe(
       "Thanks. Which day would you like to check in?",
@@ -74,10 +74,10 @@ describe("followUpForErrors", () => {
       { field: "city", message: "City is required" },
     ];
     expect(followUpForErrors(errors, "").text).toBe(
-      "Thanks. To start, I still need the Ontario city you'd like to stay in, your check-in date and the email address for the results.",
+      "Thanks. To start, I still need the city you'd like to stay in, your check-in date and the email address for the results.",
     );
     expect(followUpForErrors(errors.slice(0, 1).concat(errors[2]), "").text).toBe(
-      "Thanks. To start, I still need the Ontario city you'd like to stay in and the email address for the results.",
+      "Thanks. To start, I still need the city you'd like to stay in and the email address for the results.",
     );
   });
 
@@ -99,13 +99,13 @@ describe("followUpForErrors", () => {
       ],
       "",
     );
-    expect(followUp.text).toBe("Thanks. Which Ontario city would you like to stay in? Budget must be positive.");
+    expect(followUp.text).toBe("Thanks. Which city would you like to stay in? Budget must be positive.");
     expect(followUp.choices).toBeUndefined();
   });
 
   it("guesses the field from the text of a field-less error", () => {
     expect(followUpForErrors([{ field: null, message: "city is required" }], "").text).toBe(
-      "Thanks. Which Ontario city would you like to stay in?",
+      "Thanks. Which city would you like to stay in?",
     );
     expect(followUpForErrors([{ field: null, message: "Include the e-mail address" }], "").text).toBe(
       "Thanks. What email address should I send the results to?",
@@ -132,21 +132,21 @@ describe("followUpForErrors", () => {
 });
 
 describe("followUpForCity", () => {
-  it("offers the suggested Ontario cities as chips", () => {
-    expect(followUpForCity("'King' matches several Ontario municipalities", ["Kingston", "Kingsville"])).toEqual({
-      text: "Which Ontario city did you mean? 'King' matches several Ontario municipalities.",
+  it("offers the suggested cities as chips", () => {
+    expect(followUpForCity("'London' matches several Canadian places", ["London, ON", "New London, PE"])).toEqual({
+      text: "Which Canadian city did you mean? 'London' matches several Canadian places.",
       choices: [
-        { label: "Search Kingston", reply: "Search Kingston" },
-        { label: "Search Kingsville", reply: "Search Kingsville" },
+        { label: "Search London, ON", reply: "Search London, ON" },
+        { label: "Search New London, PE", reply: "Search New London, PE" },
       ],
     });
   });
 
-  it("asks for an Ontario city when there is nothing to suggest", () => {
-    expect(followUpForCity("'Vancouver' is not a supported Ontario municipality", [])).toEqual({
-      text: "I can only search hotels in Ontario. 'Vancouver' is not a supported Ontario municipality. Which Ontario city should I search?",
+  it("asks for a Canadian city when there is nothing to suggest", () => {
+    expect(followUpForCity("'Paris' is not in Canada", [])).toEqual({
+      text: "I can only search hotels in Canada. 'Paris' is not in Canada. Which Canadian city should I search?",
     });
-    expect(followUpForCity(undefined, []).text).toBe("I can only search hotels in Ontario. Which Ontario city should I search?");
-    expect(followUpForCity(undefined, ["Ottawa"]).text).toBe("Which Ontario city did you mean?");
+    expect(followUpForCity(undefined, []).text).toBe("I can only search hotels in Canada. Which Canadian city should I search?");
+    expect(followUpForCity(undefined, ["Ottawa"]).text).toBe("Which Canadian city did you mean?");
   });
 });
