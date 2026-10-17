@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: [main, backend, frontend, test]
+  pull_request:
+    branches: [main, backend, frontend, test]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (Maven verify)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: hotel-reservation-agent
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      # Unit/slice tests (*Test) run in surefire; integration tests (*IT) run in
+      # failsafe against Testcontainers (Docker is preinstalled on ubuntu-latest).
+      - name: Build and test
+        run: ./mvnw -B verify
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: backend-test-reports
+          path: |
+            hotel-reservation-agent/target/surefire-reports
+            hotel-reservation-agent/target/failsafe-reports
+          if-no-files-found: ignore
+
+  frontend:
+    name: Frontend (lint, typecheck, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      # hashFiles() needs the checked-out workspace, so it cannot gate the job
+      # itself; each step is gated instead. The job is a no-op until frontend/ exists.
+      - name: Set up Node 22
+        if: hashFiles('frontend/package.json') != ''
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        if: hashFiles('frontend/package.json') != ''
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint
+        if: hashFiles('frontend/package.json') != ''
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Typecheck
+        if: hashFiles('frontend/package.json') != ''
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Build
+        if: hashFiles('frontend/package.json') != ''
+        working-directory: frontend
+        run: npm run build
