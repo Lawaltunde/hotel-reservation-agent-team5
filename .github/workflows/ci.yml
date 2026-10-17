@@ -22,10 +22,10 @@ jobs:
       run:
         working-directory: hotel-reservation-agent
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up JDK 25
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25'
@@ -38,7 +38,7 @@ jobs:
 
       - name: Upload test reports
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: backend-test-reports
           path: |
@@ -51,13 +51,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # hashFiles() needs the checked-out workspace, so it cannot gate the job
       # itself; each step is gated instead. The job is a no-op until frontend/ exists.
       - name: Set up Node 22
         if: hashFiles('frontend/package.json') != ''
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: npm
