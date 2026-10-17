@@ -82,7 +82,7 @@ export function UnderstoodCard({ task }: { task: Task }) {
     if (r.notes?.trim()) rows.push({ term: "Preferences", value: r.notes.trim() });
     rows.push(
       r.emailSource === "ORGANIZER_FALLBACK"
-        ? { term: "Results to", value: `${r.email ?? NOT_GIVEN} (organizer inbox: no email in your message)`, mono: false }
+        ? { term: "Results to", value: `${r.email ?? NOT_GIVEN} (organizer inbox)`, mono: false }
         : { term: "Results to", value: r.email ?? NOT_GIVEN, mono: r.email !== null, muted: r.email === null },
     );
   }
