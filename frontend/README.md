@@ -29,4 +29,27 @@ npm run dev         # http://localhost:3000, proxies /api/* to BACKEND_URL (defa
 | `npm run lint` | ESLint |
 | `npm run typecheck` | `tsc --noEmit` |
 
-`BACKEND_URL` (see `.env.example`) applies to `npm run dev` only.
+`BACKEND_URL` (see `.env.example`) applies to `npm run dev` only. The dev server has gzip turned
+off (`compress: false`) because it would otherwise buffer the SSE progress stream.
+
+## Pages
+
+| Route | What it shows |
+|---|---|
+| `/` | Search form: Ontario city autocomplete, dates, guests, email, deadline, budget, authorization mode |
+| `/task?id=<taskId>` | Live progress (SSE, falling back to polling every 3 s) and the result with every quote |
+
+## Code layout
+
+```
+src/
+  app/          routes and layouts only
+  components/   UI (SearchForm, CityAutocomplete, ProgressTimeline, OfferCard, ResultSummary, TaskView)
+  models/       API types (task, municipality, problem-detail, health) and the zod form schema (search-form)
+  services/     API client: apiRequest/ApiError, createTask, getTask, subscribeToTask, searchMunicipalities
+```
+
+**Honesty rule (root README §1).** The UI never presents a quote or enquiry as a booking. An
+enquiry ID is labelled "Hotel reference (not a booking)", unknown amounts read "Unknown" (never 0),
+and tax status is shown as included, not included or unknown. Only the outcome
+`BOOKING_CONFIRMED` is shown as booked.
