@@ -30,9 +30,9 @@ class SpringAiOfferExtractor implements OfferExtractor {
     }
 
     @Override
-    public ExtractedOffer extract(String transcript, StayDetails stay) {
+    public Extraction extract(String transcript, StayDetails stay) {
         try {
-            ExtractedOffer offer = chatClient.prompt()
+            var response = chatClient.prompt()
                     .advisors(AdvisorParams.ENABLE_NATIVE_STRUCTURED_OUTPUT)
                     .system(s -> s.text(systemPrompt)
                             .param("checkIn", stay.checkIn().toString())
@@ -41,11 +41,12 @@ class SpringAiOfferExtractor implements OfferExtractor {
                             .param("rooms", String.valueOf(stay.rooms())))
                     .user(transcript)
                     .call()
-                    .entity(outputConverter);
+                    .responseEntity(outputConverter);
+            ExtractedOffer offer = response.entity();
             if (offer == null) {
                 throw new OfferExtractionException("The AI model returned no structured offer", null);
             }
-            return offer;
+            return new Extraction(offer, Usage.of(response.response()));
         } catch (OfferExtractionException e) {
             throw e;
         } catch (RuntimeException e) {

@@ -34,13 +34,18 @@ PORT=$(docker compose -f backend/compose.yaml port postgres 5432 | cut -d: -f2)
 SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:$PORT/hotelagent \
 SPRING_DATASOURCE_USERNAME=hotelagent SPRING_DATASOURCE_PASSWORD=hotelagent \
 SPRING_DOCKER_COMPOSE_ENABLED=false \
+ELEVENLABS_ENABLED=false GOOGLE_PLACES_ENABLED=false RESEND_ENABLED=false \
+HOTEL_AGENT_ELEVENLABS_ENABLED=false HOTEL_AGENT_GOOGLEPLACES_ENABLED=false HOTEL_AGENT_RESEND_ENABLED=false \
 java -jar backend/target/hotel-reservation-agent-0.0.1-SNAPSHOT.jar
 ```
 
 The API specs expect an **empty hotel index**, so every in-scope search ends with
 `NO_ELIGIBLE_HOTELS`. Use a fresh database (CI's service container always is); with Compose,
-`docker compose -f backend/compose.yaml down -v` before starting. Leave `ELEVENLABS_ENABLED`
-and `RESEND_ENABLED` unset so no real calls or emails are made.
+`docker compose -f backend/compose.yaml down -v` before starting. The provider flags above
+are set to `false` explicitly: `java -jar` from the repo root reads the root `.env`, and
+environment variables win over it, so a live-run `.env` cannot make the e2e run place calls,
+query Google or send email. (Backend tests are guarded separately by
+`ProviderSafetyEnvironmentPostProcessor` in `backend/src/test`.)
 
 ### 2. Run the tests (in another terminal)
 

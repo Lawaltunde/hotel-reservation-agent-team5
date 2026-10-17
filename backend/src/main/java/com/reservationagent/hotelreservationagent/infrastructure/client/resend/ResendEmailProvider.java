@@ -1,6 +1,7 @@
 package com.reservationagent.hotelreservationagent.infrastructure.client.resend;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.reservationagent.hotelreservationagent.application.port.out.EmailProvider;
 import com.reservationagent.hotelreservationagent.infrastructure.config.HotelAgentProperties;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -27,7 +28,8 @@ class ResendEmailProvider implements EmailProvider {
 
     @Override
     public CompletableFuture<String> send(Email email) {
-        SendRequest request = new SendRequest(from, List.of(email.to()), email.subject(), email.textBody(),
+        SendRequest request = new SendRequest(from, List.of(email.to()), email.cc().isEmpty() ? null : email.cc(),
+                email.subject(), email.textBody(),
                 email.attachments().stream()
                         .map(a -> new SendAttachment(a.filename(), Base64.getEncoder().encodeToString(a.content())))
                         .toList());
@@ -40,7 +42,9 @@ class ResendEmailProvider implements EmailProvider {
                 .toFuture();
     }
 
-    record SendRequest(String from, List<String> to, String subject, String text, List<SendAttachment> attachments) {
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record SendRequest(String from, List<String> to, List<String> cc, String subject, String text,
+                       List<SendAttachment> attachments) {
     }
 
     record SendAttachment(String filename, String content) {

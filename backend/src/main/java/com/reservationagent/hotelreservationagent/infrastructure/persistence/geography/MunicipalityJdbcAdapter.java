@@ -61,6 +61,25 @@ class MunicipalityJdbcAdapter implements MunicipalityRepository {
         return jdbc.sql(SELECT + " WHERE id = :id").param("id", id).query(MAPPER).optional();
     }
 
+    @Override
+    public Municipality addGeocoded(String name, GeoPoint centre) {
+        List<Municipality> existing = findByNameOrAlias(name);
+        if (!existing.isEmpty()) {
+            return existing.getFirst();
+        }
+        // North-western Ontario (Kenora district) is on Central time.
+        String zone = centre.longitude() < -90.0 ? "America/Winnipeg" : "America/Toronto";
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                        INSERT INTO municipalities (id, name, name_key, alias_keys, centre, time_zone)
+                        VALUES (:id, :name, lower(unaccent(:name)), '{}', ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography, :zone)
+                        """)
+                .param("id", id).param("name", name).param("lon", centre.longitude()).param("lat", centre.latitude())
+                .param("zone", zone)
+                .update();
+        return findById(id).orElseThrow();
+    }
+
     private static Set<String> toSet(Array array) throws SQLException {
         return array == null ? Set.of() : Set.of((String[]) array.getArray());
     }
