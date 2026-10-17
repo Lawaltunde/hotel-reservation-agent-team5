@@ -86,17 +86,56 @@ public class NotificationService {
         EmailProvider.Email email = composed.email();
         String messageId;
         try {
-            messageId = emailProvider.send(email).get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            messageId = send(email);
         } catch (Exception e) {
-            log.error("task={} report email failed: {}", taskId, e.getMessage());
-            saveDelivery(new EmailDelivery(UUID.randomUUID(), taskId, email.to(), null,
-                    EmailStatus.FAILED, clock.instant(), null, null));
-            return false;
+            if (email.cc().isEmpty() || !(rootCause(e) instanceof EmailProvider.RecipientRejectedException)) {
+                return failed(taskId, email, e);
+            }
+            // Never lose the email: a provider that refuses the copy (e.g. a sandbox key) gets the To alone.
+            log.warn("task={} provider rejected the recipients ({}); retrying without cc {}", taskId,
+                    rootCause(e).getMessage(), email.cc());
+            email = new EmailProvider.Email(email.to(), List.of(), email.subject(), email.textBody(), email.attachments());
+            try {
+                messageId = send(email);
+            } catch (Exception retry) {
+                return failed(taskId, email, retry);
+            }
+            storeWithoutCc(taskId, composed.report());
         }
         // The provider accepted it: the email is sent, whatever happens to our bookkeeping below.
         saveDelivery(new EmailDelivery(UUID.randomUUID(), taskId, email.to(), messageId,
                 EmailStatus.ACCEPTED, clock.instant(), null, null));
         return true;
+    }
+
+    /** Keeps the stored copy true to what was sent after the cc was dropped. */
+    private void storeWithoutCc(UUID taskId, SentReport r) {
+        try {
+            reports.save(taskId, new SentReport(r.subject(), r.from(), r.to(), List.of(), r.bodyText(), r.bodyHtml(),
+                    r.fields(), r.tokens(), r.transcripts(), r.composedAt()));
+        } catch (RuntimeException e) {
+            log.error("task={} could not update the report snapshot: {}", taskId, e.getMessage());
+        }
+    }
+
+    private String send(EmailProvider.Email email) throws Exception {
+        return emailProvider.send(email).get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+    }
+
+    private boolean failed(UUID taskId, EmailProvider.Email email, Exception e) {
+        log.error("task={} report email failed: {}", taskId, rootCause(e).getMessage());
+        saveDelivery(new EmailDelivery(UUID.randomUUID(), taskId, email.to(), null,
+                EmailStatus.FAILED, clock.instant(), null, null));
+        return false;
+    }
+
+    private static Throwable rootCause(Throwable e) {
+        Throwable t = e;
+        while ((t instanceof java.util.concurrent.ExecutionException || t instanceof java.util.concurrent.CompletionException)
+                && t.getCause() != null) {
+            t = t.getCause();
+        }
+        return t;
     }
 
     /** Records a delivery, retrying once; a database error never changes the outcome or resends. */
