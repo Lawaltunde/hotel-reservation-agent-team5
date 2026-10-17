@@ -111,7 +111,7 @@ class CompetitionDryRunIT {
 
     /** Taxes stated separately, every component known, so the Java comparable total is the sum. */
     private static Map<String, Object> quote(String room, String initial, String hst, String mat, String fees,
-                                             String roomType, String enquiryId) {
+                                             String allIn, String roomType, String enquiryId) {
         Map<String, Object> e = baseExtraction("OFFER_RECEIVED");
         e.put("availabilityConfirmed", true);
         e.put("checkIn", CHECK_IN.toString());
@@ -129,6 +129,9 @@ class CompetitionDryRunIT {
         e.put("cancellationTerms", "Free cancellation until 6 p.m. on the day of arrival");
         e.put("depositTerms", "No deposit; pay at the property");
         e.put("enquiryId", enquiryId);
+        e.put("allInTotal", new java.math.BigDecimal(allIn));
+        e.put("quoteValidityText", "I can hold that rate for 24 hours");
+        e.put("quoteValidityHours", new java.math.BigDecimal("24"));
         return e;
     }
 
@@ -136,8 +139,8 @@ class CompetitionDryRunIT {
         Map<String, Object> e = new LinkedHashMap<>();
         for (String k : List.of("callOutcome", "availabilityConfirmed", "checkIn", "checkOut", "roomType", "guestCount",
                 "currency", "roomSubtotal", "hst", "municipalAccommodationTax", "mandatoryFees", "optionalFees",
-                "taxesIncludedInQuote", "initialQuotedTotal", "cancellationTerms", "depositTerms", "enquiryId",
-                "quoteValidUntil", "roomHeld", "reservationCreated", "confirmationNumber", "writtenConfirmationPromised",
+                "allInTotal", "taxesIncludedInQuote", "initialQuotedTotal", "cancellationTerms", "depositTerms",
+                "enquiryId", "quoteValidityText", "quoteValidityHours", "roomHeld", "reservationCreated", "confirmationNumber", "writtenConfirmationPromised",
                 "failureReason")) {
             e.put(k, null);
         }
@@ -166,8 +169,9 @@ class CompetitionDryRunIT {
             agent("Is there any better direct rate you could offer?"),
             hotel("I can do 189 for the two nights, plus HST of 24.57 and the city accommodation tax of 7.56."),
             agent("Are there any other mandatory fees?"),
-            hotel("There is a 60 dollar mandatory amenity fee for the stay. Your reference is RG-4471.")),
-            quote("189.00", "214.50", "24.57", "7.56", "60.00", "Queen room", "RG-4471"));
+            hotel("There is a 60 dollar mandatory amenity fee, so 281.13 all in. I can hold that rate for 24 hours. "
+                    + "Your reference is RG-4471.")),
+            quote("189.00", "214.50", "24.57", "7.56", "60.00", "281.13", "Queen room", "RG-4471"));
 
     /** The expected winner: 199 + 25.87 + 7.96 + 15.00 = 247.83 all in. */
     static final ScenarioHotel BYWARD = new ScenarioHotel("ByWard Suites", "55 ByWard Market Sq, Ottawa, ON K1N 9C3",
@@ -179,8 +183,9 @@ class CompetitionDryRunIT {
             agent("Is that your best direct rate? The guest is comparing a few hotels."),
             hotel("I can bring it to 199 for the two nights. HST is 25.87 and the municipal accommodation tax is 7.96."),
             agent("Any other mandatory fees?"),
-            hotel("Just a 15 dollar cleaning fee. The quote reference is BW-2208.")),
-            quote("199.00", "229.00", "25.87", "7.96", "15.00", "King suite", "BW-2208"));
+            hotel("Just a 15 dollar cleaning fee, so 247.83 all in. I can hold that rate for 24 hours. "
+                    + "The quote reference is BW-2208.")),
+            quote("199.00", "229.00", "25.87", "7.96", "15.00", "247.83", "King suite", "BW-2208"));
 
     /** Mentions the lowest price of all, but has no room: must never win. */
     static final ScenarioHotel GLEBE = new ScenarioHotel("Glebe Budget Motel", "780 Bank St, Ottawa, ON K1S 3V6",
