@@ -26,7 +26,8 @@ public interface SubmitBookingTaskUseCase {
             Set<String> requiredAmenities,
             AuthorizationMode authorizationMode,
             BigDecimal maximumTotalCad,
-            boolean allowCompetingQuoteDisclosure
+            boolean allowCompetingQuoteDisclosure,
+            String originalPrompt
     ) {
     }
 }

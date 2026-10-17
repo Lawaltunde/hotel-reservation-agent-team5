@@ -44,6 +44,7 @@ class BookingTaskPersistenceAdapter implements BookingTaskRepository {
         e.maximumTotal = task.maximumTotal() == null ? null : task.maximumTotal().amount();
         e.requiredAmenities = task.requiredAmenities().toArray(String[]::new);
         e.allowCompetingQuoteDisclosure = task.allowCompetingQuoteDisclosure();
+        e.originalPrompt = task.originalPrompt();
         e.deadline = task.deadline();
         e.status = task.status();
         e.outcome = task.outcome();
@@ -72,6 +73,6 @@ class BookingTaskPersistenceAdapter implements BookingTaskRepository {
                 new StayDetails(e.checkIn, e.checkOut, e.rooms, e.adults, e.children),
                 e.destinationEmail, e.authorizationMode, e.maximumTotal == null ? null : Money.cad(e.maximumTotal),
                 e.requiredAmenities == null ? Set.of() : Set.copyOf(Arrays.asList(e.requiredAmenities)),
-                e.allowCompetingQuoteDisclosure, e.deadline, e.status, e.outcome, e.createdAt, e.updatedAt);
+                e.allowCompetingQuoteDisclosure, e.originalPrompt, e.deadline, e.status, e.outcome, e.createdAt, e.updatedAt);
     }
 }

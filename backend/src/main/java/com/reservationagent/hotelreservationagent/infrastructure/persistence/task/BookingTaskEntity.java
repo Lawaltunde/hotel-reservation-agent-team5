@@ -39,6 +39,7 @@ class BookingTaskEntity {
     @Column(columnDefinition = "text[]")
     String[] requiredAmenities;
     boolean allowCompetingQuoteDisclosure;
+    String originalPrompt;
     Instant deadline;
     @Enumerated(EnumType.STRING)
     TaskStatus status;

@@ -4,10 +4,12 @@ import com.reservationagent.hotelreservationagent.application.event.TaskProgress
 import com.reservationagent.hotelreservationagent.application.port.in.GetBookingTaskUseCase;
 import com.reservationagent.hotelreservationagent.application.port.in.GetBookingTaskUseCase.TaskSnapshot;
 import com.reservationagent.hotelreservationagent.application.port.in.SubmitBookingTaskUseCase;
+import com.reservationagent.hotelreservationagent.application.port.in.SubmitTaskPromptUseCase;
 import com.reservationagent.hotelreservationagent.application.port.in.SubscribeTaskProgressUseCase;
 import com.reservationagent.hotelreservationagent.domain.task.BookingTask;
 import com.reservationagent.hotelreservationagent.presentation.dto.CreateTaskRequest;
 import com.reservationagent.hotelreservationagent.presentation.dto.ProgressEventResponse;
+import com.reservationagent.hotelreservationagent.presentation.dto.PromptTaskRequest;
 import com.reservationagent.hotelreservationagent.presentation.dto.TaskAcceptedResponse;
 import com.reservationagent.hotelreservationagent.presentation.dto.TaskResponse;
 import jakarta.validation.Valid;
@@ -27,6 +29,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -41,12 +44,14 @@ public class TaskController {
     private static final Duration MAX_STREAM = Duration.ofHours(2);
 
     private final SubmitBookingTaskUseCase submitTask;
+    private final SubmitTaskPromptUseCase submitPrompt;
     private final GetBookingTaskUseCase getTask;
     private final SubscribeTaskProgressUseCase progress;
 
-    public TaskController(SubmitBookingTaskUseCase submitTask, GetBookingTaskUseCase getTask,
-                          SubscribeTaskProgressUseCase progress) {
+    public TaskController(SubmitBookingTaskUseCase submitTask, SubmitTaskPromptUseCase submitPrompt,
+                          GetBookingTaskUseCase getTask, SubscribeTaskProgressUseCase progress) {
         this.submitTask = submitTask;
+        this.submitPrompt = submitPrompt;
         this.getTask = getTask;
         this.progress = progress;
     }
@@ -67,7 +72,24 @@ public class TaskController {
                 request.requiredAmenities() == null ? null : new LinkedHashSet<>(request.requiredAmenities()),
                 request.authorizationMode(),
                 request.maximumTotalCad(),
-                Boolean.TRUE.equals(request.allowCompetingQuoteDisclosure())));
+                Boolean.TRUE.equals(request.allowCompetingQuoteDisclosure()),
+                null));
+        return accepted(taskId);
+    }
+
+    /**
+     * Starts a task from one free-text prompt. The same validation applies as for {@link #create};
+     * 400 errors name the {@code request} fields (city, checkIn, checkOut, email, ...), and 503 means
+     * the AI provider could not read the prompt. Idempotent on the optional {@code Idempotency-Key}.
+     */
+    @PostMapping(path = "/prompt", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<TaskAcceptedResponse> createFromPrompt(
+            @Valid @RequestBody PromptTaskRequest request,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey) {
+        return accepted(submitPrompt.submit(request.prompt().strip(), idempotencyKey));
+    }
+
+    private ResponseEntity<TaskAcceptedResponse> accepted(UUID taskId) {
         BookingTask task = snapshot(taskId).task();
         return ResponseEntity.accepted()
                 .location(URI.create("/api/tasks/" + taskId))
