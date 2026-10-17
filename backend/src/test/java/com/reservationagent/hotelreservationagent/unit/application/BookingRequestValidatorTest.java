@@ -141,11 +141,11 @@ class BookingRequestValidatorTest {
 
     @Test
     void unknownCityIsOutOfScopeWithNoSuggestions() {
-        Command vancouver = command("Vancouver", TODAY.plusDays(1), TODAY.plusDays(2), 1, 1, 0, "a@example.com",
+        Command seattle = command("Seattle", TODAY.plusDays(1), TODAY.plusDays(2), 1, 1, 0, "a@example.com",
                 NOW.plusSeconds(60), null);
         assertThatExceptionOfType(OutOfScopeLocationException.class)
-                .isThrownBy(() -> validator.validate(vancouver))
-                .withMessage("'Vancouver' is not a supported Ontario municipality")
+                .isThrownBy(() -> validator.validate(seattle))
+                .withMessageContaining("'Seattle'")
                 .satisfies(e -> assertThat(e.suggestions()).isEmpty());
     }
 

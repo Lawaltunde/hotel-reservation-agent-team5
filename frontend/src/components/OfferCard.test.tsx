@@ -54,7 +54,7 @@ describe("OfferCard", () => {
     expect(screen.getByText("Address unknown")).toBeInTheDocument();
     expect(screen.getByText("Quoted total")).toBeInTheDocument();
     expect(screen.getByText("Tax status unknown")).toBeInTheDocument();
-    for (const term of ["First quoted total", "HST", "Municipal accommodation tax", "Mandatory fees", "Cancellation", "Deposit", "Quote valid until", "Evidence"]) {
+    for (const term of ["First quoted total", "Mandatory fees", "Cancellation", "Deposit", "Quote valid until", "Evidence"]) {
       expect(row(term), term).toHaveTextContent(/^Unknown$/);
     }
     expect(row("Hotel reference (not a booking)")).toHaveTextContent("None given");

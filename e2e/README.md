@@ -7,7 +7,8 @@ These tests drive the **packaged app**: one Spring Boot process that serves the 
 | Spec | What it covers | State |
 |---|---|---|
 | `tests/smoke.spec.ts` | Home page title, `GET /api/health` is UP, backend indicator says "online" | runs |
-| `tests/enquiry-flow.spec.ts` | Ottawa enquiry in the UI runs to `COMPLETED` / `NO_ELIGIBLE_HOTELS` with no "booked" wording; Vancouver → 422 in the UI and the API; 400 for a past check-in; SSE stream ends at `COMPLETED`; autocomplete is Ontario-only | runs (needs a fresh database, see below) |
+| `tests/tasks-api.spec.ts` | API-level enquiry flow: an in-scope city (Ottawa) runs to `COMPLETED` / `NO_ELIGIBLE_HOTELS`; `requestId` idempotency; an out-of-scope city (`OUT_OF_SCOPE_CITY`, Seattle) → 422; past check-in → 400; SSE stream ends at `COMPLETED`; autocomplete | runs (needs a fresh database, see below) |
+| `tests/enquiry-flow.spec.ts` | UI enquiry flow on the search form | `test.fixme` until the chat UI (`POST /api/tasks/prompt`) lands |
 
 ## Run locally
 
@@ -36,7 +37,7 @@ SPRING_DOCKER_COMPOSE_ENABLED=false \
 java -jar backend/target/hotel-reservation-agent-0.0.1-SNAPSHOT.jar
 ```
 
-The enquiry specs expect an **empty hotel index**, so every Ontario search ends with
+The API specs expect an **empty hotel index**, so every in-scope search ends with
 `NO_ELIGIBLE_HOTELS`. Use a fresh database (CI's service container always is); with Compose,
 `docker compose -f backend/compose.yaml down -v` before starting. Leave `ELEVENLABS_ENABLED`
 and `RESEND_ENABLED` unset so no real calls or emails are made.

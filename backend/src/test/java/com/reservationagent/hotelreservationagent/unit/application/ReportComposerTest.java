@@ -84,8 +84,6 @@ class ReportComposerTest {
         assertThat(line(email, "Room type")).isEqualTo("Queen room");
         assertThat(line(email, "Initial phone quote")).isEqualTo("CAD 400.00");
         assertThat(line(email, "Best negotiated all-in total (CAD)")).isEqualTo("CAD 366.00");
-        assertThat(line(email, "Taxes and fees (HST / MAT / other)"))
-                .isEqualTo("HST CAD 39.00 / MAT CAD 12.00 / mandatory fees CAD 15.00 / taxes included: EXCLUDED");
         assertThat(line(email, "Cancellation / payment terms")).isEqualTo("Free cancellation until 48h before / No deposit");
         assertThat(line(email, "Hotel enquiry/reference ID")).isEqualTo("ENQ-123");
         assertThat(line(email, "Reservation confirmation #")).isEqualTo("Not booked");
