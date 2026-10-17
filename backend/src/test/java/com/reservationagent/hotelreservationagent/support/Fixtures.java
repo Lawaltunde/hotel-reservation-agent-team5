@@ -14,6 +14,7 @@ import com.reservationagent.hotelreservationagent.domain.shared.Money;
 import com.reservationagent.hotelreservationagent.domain.task.AuthorizationMode;
 import com.reservationagent.hotelreservationagent.domain.task.BookingTask;
 import com.reservationagent.hotelreservationagent.domain.task.StayDetails;
+import com.reservationagent.hotelreservationagent.domain.task.TaskIntake;
 import com.reservationagent.hotelreservationagent.domain.task.TaskStatus;
 
 import java.math.BigDecimal;
@@ -54,7 +55,7 @@ public final class Fixtures {
     public static BookingTask task(AuthorizationMode mode, Money maximumTotal) {
         return new BookingTask(UUID.randomUUID(), "req-" + UUID.randomUUID(), ottawa().id(),
                 new StayDetails(CHECK_IN, CHECK_OUT, 1, 2, 0), "traveller@example.com", mode, maximumTotal,
-                Set.of(), false, NOW.plusSeconds(7200), TaskStatus.CALLING_FOR_QUOTES, null, NOW, NOW);
+                Set.of(), false, TaskIntake.FORM, NOW.plusSeconds(7200), TaskStatus.CALLING_FOR_QUOTES, null, NOW, NOW);
     }
 
     public static Hotel hotel(String name, PropertyType type, Integer stars, PriceTier tier, double phoneConfidence,

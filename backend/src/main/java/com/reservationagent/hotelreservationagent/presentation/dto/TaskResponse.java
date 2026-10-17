@@ -10,7 +10,10 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-/** Body of {@code GET /api/tasks/{id}}. Unknown values are {@code null}. */
+/**
+ * Body of {@code GET /api/tasks/{id}}. Unknown values are {@code null}. The top-level stay fields are
+ * kept for existing clients; {@code request} is the full request as understood.
+ */
 public record TaskResponse(
         UUID taskId,
         TaskStatus status,
@@ -23,10 +26,12 @@ public record TaskResponse(
         int children,
         AuthorizationMode authorizationMode,
         Instant deadline,
+        TaskRequestResponse request,
         int candidatesScreened,
         int callsPlaced,
         OfferResponse bestOffer,
         List<OfferResponse> offers,
+        ReportResponse report,
         Instant createdAt,
         Instant updatedAt
 ) {
@@ -45,6 +50,7 @@ public record TaskResponse(
                 t.stay().children(),
                 t.authorizationMode(),
                 t.deadline(),
+                TaskRequestResponse.from(t, snapshot.municipalityName()),
                 snapshot.candidatesScreened(),
                 snapshot.callsPlaced(),
                 snapshot.bestOffer() == null ? null
@@ -52,6 +58,7 @@ public record TaskResponse(
                 snapshot.offers().stream()
                         .map(o -> OfferResponse.from(o, snapshot.hotels().get(o.hotelId())))
                         .toList(),
+                ReportResponse.from(snapshot.report(), snapshot.delivery()),
                 t.createdAt(),
                 t.updatedAt());
     }

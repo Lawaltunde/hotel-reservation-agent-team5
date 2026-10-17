@@ -97,6 +97,24 @@ public class TaskOrchestrator {
             }
         } catch (RuntimeException e) {
             log.error("task={} orchestration failed", taskId, e);
+            rescue(taskId);
+        }
+    }
+
+    /** After an unexpected failure, still get the report out with whatever was found. */
+    private void rescue(UUID taskId) {
+        try {
+            BookingTask task = tasks.findById(taskId).orElseThrow();
+            switch (task.status()) {
+                case DISCOVERING, RANKING -> {
+                    state.transition(taskId, TaskStatus.NO_CANDIDATES, "Hotel search failed");
+                    finish(taskId, TaskOutcome.NO_ELIGIBLE_HOTELS);
+                }
+                case CALLING_FOR_QUOTES -> selectOffer(taskId);
+                default -> { }
+            }
+        } catch (RuntimeException e) {
+            log.error("task={} could not send the report after a failure", taskId, e);
         }
     }
 
@@ -106,8 +124,11 @@ public class TaskOrchestrator {
         if (task.status() != TaskStatus.CALLING_FOR_QUOTES || calls.countActive(taskId) > 0) {
             return;
         }
-        // Simple stopping rule: keep calling while candidates, call budget and time remain.
-        // TODO: stop early when the expected saving of another call is below a configured threshold.
+        // The race is to the first email with a confirmed price: once a batch has produced one, stop.
+        if (evaluator.hasConfirmedPricedOffer(task, offers.findByTask(taskId))) {
+            selectOffer(taskId);
+            return;
+        }
         int started = scheduler.startNextBatch(task, candidates.findEligibleInCallOrder(taskId));
         if (started == 0) {
             selectOffer(taskId);
