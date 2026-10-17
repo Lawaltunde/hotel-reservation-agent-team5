@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { isConfirmedBooking, ResultSummary } from "@/components/ResultSummary";
+import type { TaskRequest } from "@/models/task";
 import { makeOffer, makeTask } from "@/test/fixtures";
 
 const BOOKING_WORDS = /\b(booked|reservation confirmed|confirmation number)\b/i;
@@ -24,6 +25,32 @@ describe("ResultSummary", () => {
     expect(screen.getByRole("heading", { name: /^Cheapest confirmed-available: CAD\s366\.00 all-in at Rideau Inn$/ })).toBeInTheDocument();
     expect(screen.getByText(/This is a quote, not a booking\. Nothing has been reserved\./)).toBeInTheDocument();
     expect(screen.getByText("Enquiry completed (not a booking)")).toBeInTheDocument();
+  });
+
+  it("says the result went to the organizer inbox when the prompt had no email", () => {
+    const best = makeOffer();
+    const request: TaskRequest = {
+      city: "Barrie",
+      checkIn: null,
+      checkOut: null,
+      adults: null,
+      children: null,
+      rooms: null,
+      maxBudget: null,
+      amenities: [],
+      email: "organizer@example.org",
+      emailSource: "ORGANIZER_FALLBACK",
+      originalPrompt: "cheapest hotel in Barrie",
+    };
+
+    const { unmount } = render(<ResultSummary task={makeTask({ outcome: "QUOTE_RECEIVED", bestOffer: best, offers: [best], request })} />);
+    expect(screen.getByText(/have been emailed to the organizer inbox\.$/)).toBeInTheDocument();
+    expect(screen.queryByText(/emailed to you/)).not.toBeInTheDocument();
+    unmount();
+
+    // The report's own emailSource wins when present; STATED means the user's address.
+    render(<ResultSummary task={makeTask({ outcome: "NO_VALID_QUOTE", request, report: { subject: null, to: "me@example.com", sentAt: null, deliveryStatus: "ACCEPTED", bodyText: null, emailSource: "STATED" } })} />);
+    expect(screen.getByText(/have been emailed to you\.$/)).toBeInTheDocument();
   });
 
   it("only claims a booking for BOOKING_CONFIRMED", () => {
