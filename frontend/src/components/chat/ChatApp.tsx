@@ -11,13 +11,14 @@ import { useAgentChat } from "@/components/chat/useAgentChat";
 import { isTerminalStatus } from "@/models/task";
 
 const EXAMPLES = [
-  "Ottawa, Nov 20–22, 2 adults, under $250 a night. Email me at alex@example.com",
-  "yo need a hotel in niagara falls friday cheap pls, free parking. my mail is sam@example.com",
-  "Cheapest room in downtown Toronto for 1 adult, Jan 14–16, must have Wi-Fi. Results to jordan@example.com",
+  "Halifax, Nov 20–22, 2 adults, under $250 a night. Email me at alex@example.com",
+  "yo need a hotel in montréal friday cheap pls, free parking. my mail is sam@example.com",
+  "Cheapest room in downtown Calgary for 1 adult, Jan 14–16, must have Wi-Fi. Results to jordan@example.com",
+  "Vancouver, family of 4, Dec 27 to Jan 2, pool please. Send results to casey@example.com",
 ];
 
 const STEPS = [
-  { title: "One message", body: "The Ontario city, your dates and guests, a budget and your email. Whatever you leave out, the agent asks the hotels." },
+  { title: "One message", body: "The city, your dates and guests, a budget and your email. Whatever you leave out, the agent asks the hotels." },
   { title: "We call hotels", body: "An AI agent phones the most promising ones and asks for price and availability." },
   { title: "Cheapest confirmed-available price by email", body: "All-in, in Canadian dollars, with each call's transcript." },
 ];
@@ -25,8 +26,8 @@ const STEPS = [
 const TRUST = [
   "The agent never books, holds or pays. It only asks for prices and availability.",
   "On every call, the agent says it's an AI.",
-  "Prices are compared all-in: room, HST, municipal accommodation tax and mandatory fees.",
-  "Ontario hotels only.",
+  "Prices are compared all-in: room, sales taxes, levies and fees.",
+  "Hotels anywhere in Canada.",
 ];
 
 /** The whole app: a short explainer rail and the conversation with the agent. */
@@ -64,7 +65,7 @@ export function ChatApp() {
         <header className="flex items-center justify-between gap-3 border-b border-line bg-paper/80 px-4 py-3 backdrop-blur sm:px-6">
           <div className="min-w-0">
             <h1 className="truncate font-display text-lg leading-tight text-ink">Hotel Deal Agent</h1>
-            <p className="truncate text-xs text-muted">AI agent · phones Ontario hotels for you</p>
+            <p className="truncate text-xs text-muted">AI agent · phones hotels across Canada</p>
           </div>
           <div className="flex shrink-0 items-center gap-4">
             <BackendStatus />
@@ -83,7 +84,7 @@ export function ChatApp() {
         <ChatLog followKey={sentCount} label="Conversation with the hotel agent">
           <AgentMessage>
             <p>
-              Hi! I&apos;m an AI agent that phones Ontario hotels for you and finds the cheapest confirmed-available price,
+              Hi! I&apos;m an AI agent that phones hotels anywhere in Canada and finds the cheapest confirmed-available price,
               all-in. I never book, hold or pay; I only ask for prices and availability.
             </p>
             <p className="mt-2">
@@ -174,7 +175,7 @@ export function ChatApp() {
 
       <aside className="flex flex-col gap-10 px-6 py-10 sm:px-10 lg:order-1 lg:h-dvh lg:overflow-y-auto lg:py-12" aria-label="About the hotel agent">
         <div>
-          <p className="font-mono text-[0.7rem] tracking-[0.14em] text-muted uppercase">Ontario · hotels by phone</p>
+          <p className="font-mono text-[0.7rem] tracking-[0.14em] text-muted uppercase">Canada · hotels by phone</p>
           <p className="mt-4 font-display text-4xl leading-[1.08] text-ink">
             Tell us the stay.
             <br />
@@ -222,7 +223,7 @@ export function ChatApp() {
         </section>
 
         <footer className="mt-auto border-t border-line pt-6 text-xs text-muted">
-          <p>Hotel Deal Agent finds the cheapest confirmed-available hotel price in Ontario. It never books.</p>
+          <p>Hotel Deal Agent finds the cheapest confirmed-available hotel price across Canada. It never books.</p>
         </footer>
       </aside>
     </div>
