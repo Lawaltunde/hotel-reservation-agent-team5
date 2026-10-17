@@ -35,23 +35,33 @@ property, or `null` for the whole request), 422 (city not an Ontario municipalit
 
 ### Prompt intake
 
-`POST /api/tasks/prompt` reads one free-text request ("2 nights in Ottawa from next Friday for 2,
-under $400, me@example.com") and submits it through the same validation as `POST /api/tasks`.
+`POST /api/tasks/prompt` reads one free-text request (one sentence or chat messages joined by
+newlines; the latest wins) and submits it through the same validation as `POST /api/tasks`.
+Nothing the prompt leaves out is presented as the user's: it is marked unstated and the voice
+agent asks hotels neutrally.
 
-- The email address is found in Java and replaced with `<email>` before the prompt goes to OpenAI.
-  None, or more than one, is a 400 on `email`.
+- The email address is found in Java (the last one wins, lower-cased) and replaced with `<email>`
+  before the prompt goes to OpenAI. With none, the report goes to `REPORT_RECIPIENT`; only if that
+  is unset is it a 400 on `email`.
 - The model describes dates ("next Friday", "Nov 20"); Java resolves them against today in
-  America/Toronto. A date without a year is the next one on or after today.
-- Defaults (`IntakeDefaults`): 1 room, 1 adult, 0 children; no check-out means 1 night ("this/next
-  weekend" means 2). A missing check-in is a 400. A nightly budget is multiplied by the nights.
-- Deadline is now + `app.intake.default-deadline` (30 min); mode is always `ENQUIRY_ONLY`.
+  America/Toronto. All no-date rules are in `IntakeDefaults.stay()`: no dates means tonight for one
+  night (pending decision), no check-out means 1 night ("this/next weekend" means 2).
+- Budgets come back as `{amount, unit}`; `IntakeDefaults.stayTotal()` multiplies PER_NIGHT by the
+  nights and reads UNKNOWN as per night when under 600 for a stay of more than one night.
+- A city not in `municipalities` is geocoded with Places (locality in ON; tolerates typos) and added.
+- Deadline is now + `app.intake.default-deadline` (10 min); mode is always `ENQUIRY_ONLY`.
 - 400 `field` values: `prompt`, `email`, `city`, `checkIn`, `checkOut`, `rooms`, `adults`,
   `children`, `maxBudget`, `Idempotency-Key`.
 
-`request` in `GET /api/tasks/{id}` is what the task searches for, after defaults:
-`{city, checkIn, checkOut, adults, children, rooms, maxBudget, amenities[], email, originalPrompt}`.
-`city` is the resolved municipality, `maxBudget` is the all-in CAD limit for the stay or `null`,
-and `originalPrompt` is `null` for `POST /api/tasks`.
+`request` in `GET /api/tasks/{id}`: `{city, checkIn, checkOut, adults, children, rooms, maxBudget,
+maxBudgetPerNight, amenities[], notes, email, emailSource, originalPrompt, stated{...}, askedFor{...},
+assumptions[]}`. Unstated values are `null` with `stated.<field> = false`; `askedFor` is what hotels
+are asked.
+
+`report` in `GET /api/tasks/{id}` (null until composed) is the stored copy of the email that was
+sent: `{subject, from, to, cc[], sentAt, deliveryStatus, bodyText, bodyHtml, fields{hotelName,
+hotelAddress, hotelPhone, reservationNumber, checkIn, checkOut, price, currency, priceNote,
+recordingUrl, conversationUrl}, tokensSpent, tokens{...}, transcripts[]}`.
 
 ### Offer fields
 
@@ -86,8 +96,10 @@ A variable that is present but empty falls back to the default below.
 | `server.port` | `8080` | |
 | `app.cors.allowed-origins` | `http://localhost:3000` | Only needed when a browser calls the API cross-origin; the packaged UI is same-origin. |
 | `OPENAI_API_KEY` | `not-set` | The app starts without it; offer extraction then fails with a clear error and prompt intake returns 503. |
-| `app.intake.default-deadline` / `APP_INTAKE_DEFAULT_DEADLINE` | `PT30M` | Report deadline for a prompt-started task |
-| `app.report.team-number` / `APP_REPORT_TEAM_NUMBER` | `5` | In the subject "Team # 5 - Hotel Reservation Confirmed!", used only for a confirmed booking |
+| `app.intake.default-deadline` / `APP_INTAKE_DEFAULT_DEADLINE` | `PT10M` | Hard overall timeout of a prompt task: the best result so far is emailed just before it |
+| `app.report.subject` / `APP_REPORT_SUBJECT` | `Team 5 - Hotel Reservation Enquiry Result` | Subject of the report email |
+| `app.report.conversation-url-template` | `https://elevenlabs.io/app/conversational-ai/history/{conversationId}` | Dashboard link per call (path unverified) |
+| `hotel-agent.policy.max-parallel-calls` / `HOTEL_AGENT_MAX_PARALLEL_CALLS` | `3` | Concurrent calls per task; keep within the ElevenLabs plan limit |
 | `app.report.recipient` / `REPORT_RECIPIENT` | empty | Copied (CC) on every report; the request's email is always the recipient |
 | `app.public-base-url` / `APP_PUBLIC_BASE_URL` | empty | Public URL of this backend. Without it the report says the recording link is unavailable |
 | `app.report.recording-link-ttl` / `APP_REPORT_RECORDING_LINK_TTL` | `P30D` | How long an emailed recording link works |
