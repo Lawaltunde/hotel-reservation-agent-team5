@@ -16,7 +16,8 @@ import java.util.UUID;
  * mandatory fees when all are known, otherwise the hotel's stated {@code allInTotal} if it includes
  * taxes, otherwise {@code null}. {@code totalsDisagree} is true when that sum and the stated
  * all-in total differ by more than CA$1. {@code enquiryId} is a hotel reference, never a booking
- * confirmation.
+ * confirmation. {@code quoteValidUntil} is computed from the call end and the validity period the
+ * hotel stated ({@code null} if none); {@code quoteValidityText} is the hotel's words, verbatim.
  */
 public record OfferResponse(
         UUID offerId,
@@ -39,6 +40,7 @@ public record OfferResponse(
         String depositTerms,
         String enquiryId,
         Instant quoteValidUntil,
+        String quoteValidityText,
         EvidenceStatus evidenceStatus
 ) {
 
@@ -65,6 +67,7 @@ public record OfferResponse(
                 offer.depositTerms(),
                 offer.enquiryId(),
                 offer.quoteValidUntil(),
+                offer.quoteValidity().statedText(),
                 offer.evidenceStatus());
     }
 

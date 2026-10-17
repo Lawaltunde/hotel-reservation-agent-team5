@@ -12,6 +12,8 @@ Rules:
 - mandatoryFees: non-removable fees (resort, property, destination marketing fee the hotel would not remove). 0 only if the hotel said there are none.
 - optionalFees: removable or optional charges (parking, pets, a DMF the hotel agreed to remove).
 - initialQuotedTotal: the first total the hotel quoted; roomSubtotal: the final negotiated room charge for the whole stay before taxes and fees.
+- quoteValidityText: what the hotel said about how long the quote is valid, copied verbatim; null if not discussed.
+- quoteValidityHours: that period as a number of hours if the hotel gave one (for example "24 hours" = 24, "two days" = 48); null if no period was given or it was vague ("for now", "until we sell out", "end of the week"). Never output a date or time.
 - enquiryId: a reference number the hotel gave for the enquiry. confirmationNumber: only if the hotel explicitly said a reservation was created.
 - reservationCreated: true only if the hotel explicitly confirmed a booking was made.
 - callOutcome: one of OFFER_RECEIVED, NO_AVAILABILITY, TOO_EXPENSIVE, VOICEMAIL, IVR_FAILED, HOLD_TIMEOUT, WRONG_NUMBER, REFUSED_AI_CALLER, CALL_DROPPED, UNKNOWN.
