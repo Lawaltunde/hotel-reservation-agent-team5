@@ -481,14 +481,15 @@ class CompetitionDryRunIT {
         email.path("cc").forEach(a -> cc.add(a.asString()));
         assertThat(cc).as("cc").containsExactlyElementsOf(request.cc());
         long nights = java.time.temporal.ChronoUnit.DAYS.between(request.checkIn(), request.checkOut());
-        assertThat(email.path("subject").asString()).isNotBlank();
+        // A confirmed-available option gets the organizer's subject (the report itself says nothing was booked).
+        assertThat(email.path("subject").asString()).isEqualTo("Team # 5 - Hotel Reservation Confirmed!");
         assertThat(text).contains(
                 "Hotel Name: " + winner.name(),
                 "Hotel Address: " + winner.address(),
                 "Hotel Phone (number called): " + winner.phone(),
                 request.checkIn() + " to " + request.checkOut() + " (" + nights + " night" + (nights == 1 ? "" : "s") + ")",
-                "Total price for the stay: CAD " + winnerTotal + " (all-in",
-                "Reference #: " + winner.extracted().get("enquiryId"));
+                "Price for the stay: " + winnerTotal + " CAD all-in, availability confirmed, not booked",
+                "Reservation #: " + winner.extracted().get("enquiryId"));
         // The cheaper-room, sold-out and voicemail hotels may be listed, never chosen.
         for (ScenarioHotel other : HOTELS) {
             if (other != winner) {
