@@ -70,7 +70,10 @@ public record DateExpression(Kind kind, Integer year, Integer month, Integer day
         }
     }
 
-    /** A date with no year is the first occurrence on or after {@code reference}. */
+    /**
+     * A date with no year is the first real occurrence on or after {@code reference}. Feb 29 skips to
+     * the next leap year rather than becoming Feb 28 ({@link MonthDay#atYear} would shift it).
+     */
     private Optional<LocalDate> absolute(LocalDate reference) {
         if (month == null || day == null) {
             return Optional.empty();
@@ -79,10 +82,11 @@ public record DateExpression(Kind kind, Integer year, Integer month, Integer day
             return Optional.of(LocalDate.of(year, month, day));
         }
         MonthDay monthDay = MonthDay.of(month, day);
-        LocalDate candidate = monthDay.atYear(reference.getYear());
-        if (candidate.isBefore(reference)) {
-            candidate = monthDay.atYear(reference.getYear() + 1);
+        for (int year = reference.getYear(); year <= reference.getYear() + 8; year++) {
+            if (monthDay.isValidYear(year) && !monthDay.atYear(year).isBefore(reference)) {
+                return Optional.of(monthDay.atYear(year));
+            }
         }
-        return Optional.of(candidate);
+        return Optional.empty();
     }
 }
