@@ -84,16 +84,31 @@ public class NotificationService {
             log.error("task={} could not store the report snapshot: {}", taskId, e.getMessage());
         }
         EmailProvider.Email email = composed.email();
+        String messageId;
         try {
-            String messageId = emailProvider.send(email).get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            deliveries.save(new EmailDelivery(UUID.randomUUID(), taskId, email.to(), messageId,
-                    EmailStatus.ACCEPTED, clock.instant(), null, null));
-            return true;
+            messageId = emailProvider.send(email).get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (Exception e) {
             log.error("task={} report email failed: {}", taskId, e.getMessage());
-            deliveries.save(new EmailDelivery(UUID.randomUUID(), taskId, email.to(), null,
+            saveDelivery(new EmailDelivery(UUID.randomUUID(), taskId, email.to(), null,
                     EmailStatus.FAILED, clock.instant(), null, null));
             return false;
+        }
+        // The provider accepted it: the email is sent, whatever happens to our bookkeeping below.
+        saveDelivery(new EmailDelivery(UUID.randomUUID(), taskId, email.to(), messageId,
+                EmailStatus.ACCEPTED, clock.instant(), null, null));
+        return true;
+    }
+
+    /** Records a delivery, retrying once; a database error never changes the outcome or resends. */
+    private void saveDelivery(EmailDelivery delivery) {
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            try {
+                deliveries.save(delivery);
+                return;
+            } catch (RuntimeException e) {
+                log.error("task={} could not record the {} email delivery (attempt {}): {}", delivery.taskId(),
+                        delivery.status(), attempt, e.getMessage());
+            }
         }
     }
 
