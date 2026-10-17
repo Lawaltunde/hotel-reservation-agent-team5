@@ -172,7 +172,7 @@ export interface TaskRequest {
   notes?: string | null;
   /** Where results go. With `ORGANIZER_FALLBACK` this is the organizer inbox, not the user's. */
   email: string | null;
-  emailSource?: "PROMPT" | "ORGANIZER_FALLBACK" | (string & {}) | null;
+  emailSource?: "STATED" | "ORGANIZER_FALLBACK" | (string & {}) | null;
   /** The prompt exactly as the user sent it. */
   originalPrompt: string | null;
   /** Whether the user gave each field. Unstated fields are null; never show a default as their choice. */
