@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
- * Palette: Ontario lake and pine, cool rather than warm. Every component colour comes from these
+ * Palette: Canadian lake and pine, cool rather than warm. Every component colour comes from these
  * tokens so dark mode is a second set of values, not a second set of classes.
  */
 :root {

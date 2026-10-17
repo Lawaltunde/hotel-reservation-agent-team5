@@ -77,7 +77,7 @@ describe("ResultSummary", () => {
     ["NO_VALID_OFFER", "No usable quote yet"],
     ["EMAIL_FAILED", "We couldn't send your email"],
     ["DEADLINE_EXCEEDED", "The deadline passed before the search finished"],
-    ["OUT_OF_SCOPE_LOCATION", "We only search Ontario"],
+    ["OUT_OF_SCOPE_LOCATION", "We only search Canada"],
     ["BOOKING_UNCERTAIN", "Booking status is uncertain"],
     ["BOOKING_FAILED", "The booking did not go through"],
   ] as const)("titles %s as %s", (status, title) => {
