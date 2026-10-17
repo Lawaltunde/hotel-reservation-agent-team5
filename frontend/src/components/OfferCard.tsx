@@ -1,4 +1,4 @@
-import { formatMoney, formatQuoteValidity, humanize, taxInclusionLabel, UNKNOWN } from "@/components/format";
+import { ESTIMATE_NOTE, formatMoney, formatQuoteValidity, humanize, rankingPrice, taxInclusionLabel, UNKNOWN } from "@/components/format";
 import type { Offer } from "@/models/task";
 
 interface OfferCardProps {
@@ -13,12 +13,13 @@ interface OfferCardProps {
  * One hotel quote. Per the honesty rule, a quote is always labelled as a quote: the enquiry ID
  * is a hotel reference, not a booking, and unknown amounts read "Unknown", never 0.
  *
- * The headline is the comparable all-in total (`negotiatedTotal`). When that is unknown the card
- * says so instead of promoting a partial figure such as a pre-tax room rate.
+ * The headline is the ranking price: the all-in total, or a clearly marked estimate ("≈ … incl.
+ * HST") when the hotel only gave a pre-tax rate. When neither exists the card says so instead of
+ * promoting a partial figure.
  */
 export function OfferCard({ offer, best = false, booked = false }: OfferCardProps) {
   const currency = offer.currency || "CAD";
-  const total = offer.negotiatedTotal;
+  const { amount: total, estimated } = rankingPrice(offer);
   const validity = formatQuoteValidity(offer);
   const headingId = `offer-${offer.offerId}`;
   const totalId = `${headingId}-total`;
@@ -46,8 +47,17 @@ export function OfferCard({ offer, best = false, booked = false }: OfferCardProp
           {offer.roomType && <p className="mt-1 text-sm text-muted">{offer.roomType}</p>}
         </div>
         <div id={totalId} className="text-right">
-          <p className="text-xs text-muted">All-in total, {currency}</p>
-          {total !== null ? (
+          <p className="text-xs text-muted">{estimated ? `Estimated price, ${currency}` : `All-in total, ${currency}`}</p>
+          {total !== null && estimated ? (
+            <>
+              <p className="font-mono text-2xl font-semibold tabular-nums text-ink">
+                <span aria-hidden="true">≈ </span>
+                <span className="sr-only">About </span>
+                {formatMoney(total, currency)}
+              </p>
+              <p className="max-w-60 text-xs text-lamp">{ESTIMATE_NOTE}</p>
+            </>
+          ) : total !== null ? (
             <>
               <p className="font-mono text-2xl font-semibold tabular-nums text-ink">{formatMoney(total, currency)}</p>
               <p className="text-xs text-muted">Room, HST, municipal tax and mandatory fees</p>
@@ -71,7 +81,7 @@ export function OfferCard({ offer, best = false, booked = false }: OfferCardProp
         <p role="note" className="mt-3 rounded-md border border-lamp-line bg-lamp-soft p-3 text-sm text-ink">
           <span className="font-medium">The figures don&apos;t quite add up.</span> The hotel stated an all-in total of{" "}
           {formatMoney(offer.allInTotal, currency)}, but the room rate, taxes and fees it gave sum to{" "}
-          {formatMoney(total, currency)}. We used the summed figure; confirm the total with the hotel before relying on it.
+          {formatMoney(offer.negotiatedTotal, currency)}. We used the summed figure; confirm the total with the hotel before relying on it.
         </p>
       )}
 
