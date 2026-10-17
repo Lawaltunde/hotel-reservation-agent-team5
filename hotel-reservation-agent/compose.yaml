@@ -1,0 +1,13 @@
+services:
+  postgres:
+    # Official PostGIS image is published for amd64 only; it runs under emulation on Apple Silicon.
+    image: 'postgis/postgis:17-3.5'
+    platform: linux/amd64
+    environment:
+      - 'POSTGRES_DB=hotelagent'
+      - 'POSTGRES_USER=hotelagent'
+      - 'POSTGRES_PASSWORD=hotelagent'
+    ports:
+      - '5432'
+    labels:
+      org.springframework.boot.service-connection: postgres
