@@ -1,5 +1,6 @@
 package com.reservationagent.hotelreservationagent.presentation.rest;
 
+import com.reservationagent.hotelreservationagent.application.port.out.CallRecordingSource.RecordingUnavailableException;
 import com.reservationagent.hotelreservationagent.application.port.out.TaskPromptInterpreter.InterpreterUnavailableException;
 import com.reservationagent.hotelreservationagent.application.service.validation.OutOfScopeLocationException;
 import com.reservationagent.hotelreservationagent.application.service.validation.RequestValidationException;
@@ -62,6 +63,22 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE,
                 "Your request could not be read right now. Please try again in a minute.");
         problem.setTitle("Request reader unavailable");
+        return problem;
+    }
+
+    @ExceptionHandler(RecordingController.RecordingNotFoundException.class)
+    ProblemDetail recordingNotFound(RecordingController.RecordingNotFoundException e) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+        problem.setTitle("Recording not found");
+        return problem;
+    }
+
+    @ExceptionHandler(RecordingUnavailableException.class)
+    ProblemDetail recordingUnavailable(RecordingUnavailableException e) {
+        log.warn("Call recording could not be fetched: {}", e.getMessage());
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY,
+                "The recording could not be fetched right now. Please try again later.");
+        problem.setTitle("Recording unavailable");
         return problem;
     }
 
