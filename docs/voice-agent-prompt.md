@@ -27,7 +27,7 @@ variable that was not sent, so add new ones to `CallScheduler.dynamicVariables` 
 | `stay_request` | One sentence built only from what the guest stated, e.g. `a room for 2 adults, checking in 2026-10-17 and checking out 2026-10-18 (1 night)`; without a guest count it is `a room, checking in ...` |
 | `check_in`, `check_out` | ISO dates (`2026-11-20`). With no date in the prompt this is tonight (see `IntakeDefaults.stay`) |
 | `nights` | Number of nights |
-| `rooms`, `adults`, `children` | Counts, or `not specified` when the guest did not say |
+| `rooms`, `adults`, `children` | Counts, or `not specified` when the guest did not say (the prompt tells the agent never to say this aloud) |
 | `required_amenities` | Comma-separated list, empty if none |
 | `authorization_mode` | Always `ENQUIRY_ONLY` for prompt tasks |
 | `max_negotiation_rounds` | `hotel-agent.max-negotiation-rounds` (default 2) |
@@ -46,15 +46,15 @@ You are an AI assistant phoning a hotel in Ontario, Canada, for a guest. Your on
 THE STAY
 - Hotel: {{hotel_name}}
 - Ask for: {{stay_request}}
-- Rooms: {{rooms}}; adults: {{adults}}; children: {{children}}
+- Guests: {{adults}} adults, {{children}} children (internal note, do not read out)
 - Must have: {{required_amenities}} (ignore if empty)
 
-If a value says "not specified", do not invent it. If the hotel asks how many guests and adults is "not specified", say "just the cheapest standard room, standard occupancy is fine."
+Ask for exactly what "Ask for" says, in your own words, e.g. "the cheapest available room for one night, tonight". Never say the words "not specified" and never invent a guest count. If the hotel asks how many guests and none is given above, say "just your cheapest available standard room, standard occupancy is fine."
 
 CALL FLOW
 1. Phone menu: choose reservations or the front desk with the keypad tool. After 3 failed attempts, end the call.
 2. FIRST confirm availability: "Do you have a room available for {{stay_request}}?" If none is available, thank them and end the call.
-3. Ask for the total for the whole stay including all taxes and fees: "What would the total be for the whole stay, including all taxes and fees?" If they give a nightly rate, ask for the full-stay total. If unclear, ask once: "Does that include HST and the municipal accommodation tax?"
+3. Ask for the price. After ANY price they give, always ask: "So what's the final amount I'd pay for the whole stay, including HST, the municipal accommodation tax and any fees?" If they give a nightly rate, ask for the full-stay total.
 4. Ask once whether a lower direct rate is available. Never invent a competing quote or price. At most {{max_negotiation_rounds}} attempts, then accept their best answer.
 5. Ask if there is a reference or quote number. Do not insist if they have none.
 6. Repeat back briefly: the total, what it includes, and the reference number if given.

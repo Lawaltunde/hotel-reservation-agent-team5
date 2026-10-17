@@ -7,6 +7,7 @@ import com.reservationagent.hotelreservationagent.application.service.notificati
 import com.reservationagent.hotelreservationagent.application.service.notification.ReportComposer.Composed;
 import com.reservationagent.hotelreservationagent.application.service.notification.ReportComposer.ReportContext;
 import com.reservationagent.hotelreservationagent.application.service.notification.ReportComposer.ReportInput;
+import com.reservationagent.hotelreservationagent.application.service.pricing.OfferEvaluator;
 import com.reservationagent.hotelreservationagent.application.service.recording.CallRecordingService.IssuedLink;
 import com.reservationagent.hotelreservationagent.domain.call.CallOutcome;
 import com.reservationagent.hotelreservationagent.domain.call.CallStatus;
@@ -42,11 +43,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** The single report email: cheapest confirmed option, honest wording, evidence inline. */
 class ReportComposerTest {
 
-    private static final String SUBJECT = "Team 5 - Hotel Reservation Enquiry Result";
+    private static final String SUBJECT = "Team # 5 - Hotel Reservation Confirmed!";
+    private static final String UNCONFIRMED = "Team # 5 - Hotel enquiry: no confirmed availability";
+    private static final OfferEvaluator EVALUATOR = new OfferEvaluator(CLOCK, new BigDecimal("0.06"));
     private static final AiUsageRepository.Totals USAGE = new AiUsageRepository.Totals(1000, 200, 95);
 
-    private final ReportComposer composer = new ReportComposer(SUBJECT, "organizer@example.org",
-            "Hotel Deal Agent <agent@example.com>", CLOCK);
+    private final ReportComposer composer = new ReportComposer(SUBJECT, UNCONFIRMED, "organizer@example.org",
+            "Hotel Deal Agent <agent@example.com>", EVALUATOR, CLOCK);
     private final BookingTask task = task();
     private final Hotel rideau = hotel("Rideau Inn", PropertyType.HOTEL, 3, PriceTier.MIDSCALE, 0.9, "+16135550100");
     private final Hotel budget = hotel("Budget Motel", PropertyType.MOTEL, 2, PriceTier.ECONOMY, 0.9, "+16135550111");
@@ -89,8 +92,8 @@ class ReportComposerTest {
         assertThat(line(email, "Hotel Name")).isEqualTo("Rideau Inn");
         assertThat(line(email, "Hotel Phone (number called)")).isEqualTo("+16135550100");
         assertThat(line(email, "Stay")).isEqualTo("2026-11-20 to 2026-11-22 (2 nights)");
-        assertThat(line(email, "Total price for the stay")).startsWith("CAD 366.00 (all-in");
-        assertThat(line(email, "Reference #")).isEqualTo("ENQ-123");
+        assertThat(line(email, "Price for the stay")).isEqualTo("366.00 CAD all-in, availability confirmed, not booked");
+        assertThat(line(email, "Reservation #")).isEqualTo("ENQ-123");
         assertThat(email.textBody())
                 .contains("No booking, reservation, hold or payment was made")
                 .contains("Tokens spent: 1200 (OpenAI prompt 1000 + completion 200); ElevenLabs call time: 95 s")
@@ -102,18 +105,19 @@ class ReportComposerTest {
     }
 
     @Test
-    void withoutAComparableTotalTheCheapestConfirmedOfferIsReportedWithItsCaveat() {
+    void anHstEstimateIsLabelledAndNeverShownAsAStatedTotal() {
         HotelOffer stated = new HotelOffer(UUID.randomUUID(), task.id(), budget.id(), UUID.randomUUID(), true,
                 task.stay().checkIn(), task.stay().checkOut(), "Double", 2, null,
                 new PriceBreakdown(Money.cad("250.00"), null, null, null, null, null, TaxInclusion.EXCLUDED),
                 null, null, null, null, false, EvidenceStatus.VERBAL_ONLY, NOW);
-        Composed composed = composer.compose(input(TaskOutcome.NO_VALID_QUOTE, null, null),
+        Composed composed = composer.compose(input(TaskOutcome.ENQUIRY_COMPLETED, stated, budget),
                 new ReportContext(List.of(evidence(task, budget, stated)), USAGE));
 
+        assertThat(composed.email().subject()).isEqualTo(SUBJECT);
         assertThat(line(composed.email(), "Hotel Name")).isEqualTo("Budget Motel");
-        assertThat(line(composed.email(), "Total price for the stay"))
-                .isEqualTo("CAD 250.00 (room charge before taxes and fees; taxes not confirmed)");
-        assertThat(composed.email().textBody()).doesNotContain("Reference #:");
+        assertThat(line(composed.email(), "Price for the stay")).isEqualTo(
+                "≈ CAD 282.50 incl. HST; municipal accommodation tax not confirmed (availability confirmed, not booked)");
+        assertThat(line(composed.email(), "Reservation #")).isEqualTo("None provided (no reservation made, as instructed)");
         assertThat(composed.report().fields().reservationNumber()).isNull();
     }
 
@@ -126,6 +130,7 @@ class ReportComposerTest {
         Composed composed = composer.compose(input(TaskOutcome.NO_VALID_QUOTE, null, null),
                 new ReportContext(List.of(evidence(task, budget, soldOut)), USAGE));
 
+        assertThat(composed.email().subject()).isEqualTo(UNCONFIRMED);
         assertThat(composed.email().textBody()).contains("No confirmed available room was found among the 1 hotel(s) called.");
         assertThat(composed.report().fields().hotelName()).isNull();
         assertThat(composed.report().fields().price()).isNull();
@@ -145,7 +150,7 @@ class ReportComposerTest {
 
     @Test
     void theOrganizerIsNotCopiedTwiceWhenItIsAlsoTheRecipient() {
-        ReportComposer sameInbox = new ReportComposer(SUBJECT, "traveller@example.com", null, CLOCK);
+        ReportComposer sameInbox = new ReportComposer(SUBJECT, UNCONFIRMED, "traveller@example.com", null, EVALUATOR, CLOCK);
         Composed composed = sameInbox.compose(input(TaskOutcome.NO_ELIGIBLE_HOTELS, null, null),
                 new ReportContext(List.of(), USAGE));
 

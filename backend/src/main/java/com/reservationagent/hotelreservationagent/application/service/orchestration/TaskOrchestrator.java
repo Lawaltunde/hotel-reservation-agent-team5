@@ -147,7 +147,7 @@ public class TaskOrchestrator {
             finish(taskId, TaskOutcome.NO_VALID_QUOTE);
             return;
         }
-        state.transition(taskId, TaskStatus.OFFER_SELECTED, "Best offer: " + best.get().negotiated().comparableTotal().orElseThrow());
+        state.transition(taskId, TaskStatus.OFFER_SELECTED, "Best offer: " + evaluator.price(best.get()).map(p -> p.amount() + (p.estimated() ? " (estimate)" : "")).orElse("?"));
         TaskOutcome outcome = switch (task.authorizationMode()) {
             case ENQUIRY_ONLY -> TaskOutcome.ENQUIRY_COMPLETED;
             case REQUIRE_APPROVAL -> TaskOutcome.QUOTE_RECEIVED;
