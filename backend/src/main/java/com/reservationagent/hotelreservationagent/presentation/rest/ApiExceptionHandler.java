@@ -1,5 +1,6 @@
 package com.reservationagent.hotelreservationagent.presentation.rest;
 
+import com.reservationagent.hotelreservationagent.application.port.out.TaskPromptInterpreter.InterpreterUnavailableException;
 import com.reservationagent.hotelreservationagent.application.service.validation.OutOfScopeLocationException;
 import com.reservationagent.hotelreservationagent.application.service.validation.RequestValidationException;
 import com.reservationagent.hotelreservationagent.application.service.validation.RequestValidationException.FieldError;
@@ -10,6 +11,8 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -33,6 +36,8 @@ import tools.jackson.databind.exc.MismatchedInputException;
 @RestControllerAdvice
 public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
+    private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
+
     @ExceptionHandler(RequestValidationException.class)
     ProblemDetail invalidRequest(RequestValidationException e) {
         return badRequest(e.errors());
@@ -48,6 +53,15 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT, e.getMessage());
         problem.setTitle(e.suggestions().isEmpty() ? "Location out of scope" : "Ambiguous location");
         problem.setProperty("suggestions", e.suggestions());
+        return problem;
+    }
+
+    @ExceptionHandler(InterpreterUnavailableException.class)
+    ProblemDetail interpreterUnavailable(InterpreterUnavailableException e) {
+        log.warn("Prompt could not be interpreted: {}", e.getMessage());
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE,
+                "Your request could not be read right now. Please try again in a minute.");
+        problem.setTitle("Request reader unavailable");
         return problem;
     }
 
