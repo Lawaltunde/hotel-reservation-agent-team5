@@ -23,7 +23,8 @@ public class BlankEnvDefaultsPostProcessor implements EnvironmentPostProcessor, 
             "OPENAI_CHAT_MODEL", new String[] {"spring.ai.openai.chat.model", "gpt-5.4-mini"},
             "OPENAI_REASONING_EFFORT", new String[] {"spring.ai.openai.chat.reasoning-effort", "none"},
             "OPENAI_TEMPERATURE", new String[] {"spring.ai.openai.chat.temperature", "0.1"},
-            "APP_INTAKE_DEFAULT_DEADLINE", new String[] {"app.intake.default-deadline", "PT30M"},
+            "APP_INTAKE_DEFAULT_DEADLINE", new String[] {"app.intake.default-deadline", "PT10M"},
+            "HOTEL_AGENT_MAX_PARALLEL_CALLS", new String[] {"hotel-agent.policy.max-parallel-calls", "3"},
             "APP_REPORT_SUBJECT", new String[] {"app.report.subject", "Team 5 - Hotel Reservation Enquiry Result"},
             "APP_REPORT_RECORDING_LINK_TTL", new String[] {"app.report.recording-link-ttl", "P30D"});
 

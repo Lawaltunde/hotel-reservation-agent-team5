@@ -72,7 +72,7 @@ public class TaskPromptService implements SubmitTaskPromptUseCase {
 
     public TaskPromptService(TaskPromptInterpreter interpreter, SubmitBookingTaskUseCase submitTask,
                              BookingRequestValidator validator, BookingTaskRepository tasks, Clock clock,
-                             @Value("${app.intake.default-deadline:PT30M}") Duration defaultDeadline,
+                             @Value("${app.intake.default-deadline:PT10M}") Duration defaultDeadline,
                              @Value("${app.report.recipient:}") String organizerEmail, AiUsageRepository usage) {
         this.usage = usage;
         this.interpreter = interpreter;
