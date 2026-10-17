@@ -11,6 +11,11 @@ public interface CallRecordingSource {
      */
     Optional<CallRecording> fetch(String conversationId);
 
+    /** False for the stand-in used when the voice provider is disabled: there is nothing to wait for. */
+    default boolean isEnabled() {
+        return true;
+    }
+
     record CallRecording(String contentType, byte[] audio) {
     }
 

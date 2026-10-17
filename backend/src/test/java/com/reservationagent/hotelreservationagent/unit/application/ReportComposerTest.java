@@ -3,6 +3,7 @@ package com.reservationagent.hotelreservationagent.unit.application;
 import com.reservationagent.hotelreservationagent.application.port.out.AiUsageRepository;
 import com.reservationagent.hotelreservationagent.application.port.out.EmailProvider.Email;
 import com.reservationagent.hotelreservationagent.application.service.notification.ReportComposer;
+import com.reservationagent.hotelreservationagent.application.service.notification.SentReport;
 import com.reservationagent.hotelreservationagent.application.service.notification.ReportComposer.CallEvidence;
 import com.reservationagent.hotelreservationagent.application.service.notification.ReportComposer.Composed;
 import com.reservationagent.hotelreservationagent.application.service.notification.ReportComposer.ReportContext;
@@ -185,5 +186,77 @@ class ReportComposerTest {
                 new ReportContext(List.of(), USAGE)).email().textBody();
 
         assertThat(body).endsWith("—\nTeam Five\nAda Lovelace — ada@example.com\nGrace Hopper\n");
+    }
+
+    private static com.reservationagent.hotelreservationagent.application.port.out.CallRecordingSource.CallRecording mp3(int bytes) {
+        return new com.reservationagent.hotelreservationagent.application.port.out.CallRecordingSource.CallRecording(
+                "audio/mpeg", new byte[bytes]);
+    }
+
+    @Test
+    void recordingsAndTranscriptsAreAttachedChosenHotelFirst() {
+        HotelOffer best = offer(task, rideau.id(), breakdown("300.00", "39.00", "12.00", "15.00"), NOW);
+        CallEvidence other = evidence(task, budget, null);
+        CallEvidence chosen = evidence(task, rideau, best);
+        Composed composed = composer.compose(input(TaskOutcome.ENQUIRY_COMPLETED, best, rideau),
+                new ReportContext(List.of(other, chosen), USAGE,
+                        java.util.Map.of(other.call().id(), mp3(10), chosen.call().id(), mp3(20))));
+
+        assertThat(composed.email().attachments()).extracting(a -> a.filename()).containsExactly(
+                "call-1-rideau-inn.mp3", "call-1-rideau-inn-transcript.txt",
+                "call-2-budget-motel.mp3", "call-2-budget-motel-transcript.txt");
+        assertThat(composed.email().attachments().get(0).contentType()).isEqualTo("audio/mpeg");
+        assertThat(new String(composed.email().attachments().get(1).content(), java.nio.charset.StandardCharsets.UTF_8))
+                .isEqualTo("[00:00] Agent: Is a room available?\n[00:02] Hotel: Yes.\n");
+        assertThat(composed.report().attachments()).extracting(SentReport.AttachmentInfo::fileName).containsExactly(
+                "call-1-rideau-inn.mp3", "call-1-rideau-inn-transcript.txt",
+                "call-2-budget-motel.mp3", "call-2-budget-motel-transcript.txt");
+        assertThat(composed.report().attachments().get(0))
+                .isEqualTo(new SentReport.AttachmentInfo("call-1-rideau-inn.mp3", "audio/mpeg", 20));
+        assertThat(composed.email().textBody()).contains("Attachments: call-1-rideau-inn.mp3, ");
+    }
+
+    @Test
+    void aMissingRecordingIsLinkedInstead() {
+        HotelOffer best = offer(task, rideau.id(), breakdown("300.00", "39.00", "12.00", "15.00"), NOW);
+        CallEvidence chosen = evidence(task, rideau, best);
+        Composed composed = composer.compose(input(TaskOutcome.ENQUIRY_COMPLETED, best, rideau),
+                new ReportContext(List.of(chosen), USAGE, java.util.Map.of()));
+
+        assertThat(composed.email().attachments()).extracting(a -> a.filename())
+                .containsExactly("call-1-rideau-inn-transcript.txt");
+        assertThat(composed.email().textBody()).contains(
+                "Rideau Inn: recording not yet available from ElevenLabs; link: https://agent.example.com/api/recordings/tok-");
+    }
+
+    @Test
+    void recordingsStopAtTheSizeCapButTheChosenOneComesFirst() {
+        HotelOffer best = offer(task, rideau.id(), breakdown("300.00", "39.00", "12.00", "15.00"), NOW);
+        CallEvidence chosen = evidence(task, rideau, best);
+        CallEvidence other = evidence(task, budget, null);
+        int big = (int) (ReportComposer.MAX_ATTACHMENT_BYTES * 0.6);
+        Composed composed = composer.compose(input(TaskOutcome.ENQUIRY_COMPLETED, best, rideau),
+                new ReportContext(List.of(other, chosen), USAGE,
+                        java.util.Map.of(other.call().id(), mp3(big), chosen.call().id(), mp3(big))));
+
+        assertThat(composed.email().attachments()).extracting(a -> a.filename()).containsExactly(
+                "call-1-rideau-inn.mp3", "call-1-rideau-inn-transcript.txt", "call-2-budget-motel-transcript.txt");
+        assertThat(composed.email().attachments().stream().mapToLong(a -> a.content().length).sum())
+                .isLessThanOrEqualTo(ReportComposer.MAX_ATTACHMENT_BYTES);
+        assertThat(composed.email().textBody()).contains("Budget Motel: recording not attached (email size limit); link: ");
+    }
+
+    @Test
+    void voicemailCallsAreNotAttached() {
+        CallEvidence voicemail = evidence(task, budget, null);
+        PhoneCall c = voicemail.call();
+        CallEvidence asVoicemail = new CallEvidence(new PhoneCall(c.id(), c.taskId(), c.hotelId(), c.dialledNumber(),
+                c.providerCallId(), c.conversationId(), CallStatus.COMPLETED, CallOutcome.VOICEMAIL, c.startedAt(),
+                c.endedAt(), null), voicemail.hotel(), null, voicemail.transcript(), voicemail.recording(),
+                voicemail.conversationUrl());
+        Composed composed = composer.compose(input(TaskOutcome.NO_VALID_QUOTE, null, null),
+                new ReportContext(List.of(asVoicemail), USAGE, java.util.Map.of(c.id(), mp3(10))));
+
+        assertThat(composed.email().attachments()).isEmpty();
     }
 }
