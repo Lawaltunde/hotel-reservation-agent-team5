@@ -25,6 +25,6 @@ class LoggingVoiceCallProvider implements VoiceCallProvider {
     public CompletableFuture<StartedCall> startCall(PhoneNumber to, Map<String, String> dynamicVariables) {
         String conversationId = "dev-" + UUID.randomUUID();
         log.info("[voice disabled] would call {} conversation={} vars={}", to.e164(), conversationId, dynamicVariables);
-        return CompletableFuture.completedFuture(new StartedCall("dev-call", conversationId));
+        return CompletableFuture.completedFuture(new StartedCall("dev-call-" + UUID.randomUUID(), conversationId));
     }
 }

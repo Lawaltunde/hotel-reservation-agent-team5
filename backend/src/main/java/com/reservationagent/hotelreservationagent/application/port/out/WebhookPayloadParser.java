@@ -16,9 +16,12 @@ public interface WebhookPayloadParser {
                        Optional<EmailStatusChanged> emailStatusChanged) {
     }
 
-    /** {@code endedAt} is when the provider says the call ended, or {@code null} if it did not say. */
+    /**
+     * @param endedAt         when the provider says the call ended, or {@code null} if it did not say
+     * @param durationSeconds the billed call length, or 0 if unknown
+     */
     record CallCompleted(String conversationId, List<TranscriptTurn> turns, boolean callSucceeded, String failureReason,
-                         Instant endedAt) {
+                         Instant endedAt, long durationSeconds) {
     }
 
     record EmailStatusChanged(String providerMessageId, String status) {
