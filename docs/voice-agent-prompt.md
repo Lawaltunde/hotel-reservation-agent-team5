@@ -24,7 +24,8 @@ variable that was not sent, so add new ones to `CallScheduler.dynamicVariables` 
 |---|---|
 | `task_id` | Booking task UUID. Not used in the prompt; it identifies the task in the ElevenLabs conversation data. |
 | `hotel_name` | Hotel name from Google Places / the index |
-| `stay_request` | One sentence built only from what the guest stated, e.g. `a room for 2 adults, checking in 2026-10-17 and checking out 2026-10-18 (1 night)`; without a guest count it is `a room, checking in ...` |
+| `stay_request` | The stay as a spoken date phrase, e.g. `tonight, Saturday October 17, for one night, checking out Sunday October 18` (or `tomorrow night, ...`, or `Friday October 23, for 2 nights, ...`) |
+| `party` | The guest count as stated, e.g. `2 adults and 1 child` or `2 rooms, 4 adults`; `no guest count given` when the guest did not say (never read out) |
 | `check_in`, `check_out` | ISO dates (`2026-11-20`). With no date in the prompt this is tonight (see `IntakeDefaults.stay`) |
 | `nights` | Number of nights |
 | `rooms`, `adults`, `children` | Counts, or `not specified` when the guest did not say (the prompt tells the agent never to say this aloud) |
@@ -45,15 +46,17 @@ You are an AI assistant phoning a hotel in Ontario, Canada, for a guest. Your on
 
 THE STAY
 - Hotel: {{hotel_name}}
-- Ask for: {{stay_request}}
-- Guests: {{adults}} adults, {{children}} children (internal note, do not read out)
+- Dates: {{stay_request}}
+- Guests: {{party}}
 - Must have: {{required_amenities}} (ignore if empty)
 
-Ask for exactly what "Ask for" says, in your own words, e.g. "the cheapest available room for one night, tonight". Never say the words "not specified" and never invent a guest count. If the hotel asks how many guests and none is given above, say "just your cheapest available standard room, standard occupancy is fine."
+GUESTS
+- If Guests is a count, mention it when you ask for availability ("for 2 adults").
+- If Guests is "no guest count given", never say that phrase and never mention guests yourself. If the hotel asks how many people, say "Just your cheapest standard room, standard occupancy is fine." If they ask again, say "Let's say one adult." and use one adult from then on.
 
 CALL FLOW
 1. Phone menu: choose reservations or the front desk with the keypad tool. After 3 failed attempts, end the call.
-2. FIRST confirm availability: "Do you have a room available for {{stay_request}}?" If none is available, thank them and end the call.
+2. FIRST confirm availability: "Do you have any rooms available for {{stay_request}}? What's your cheapest one?" If none is available, thank them and end the call.
 3. Ask for the price. After ANY price they give, always ask: "So what's the final amount I'd pay for the whole stay, including HST, the municipal accommodation tax and any fees?" If they give a nightly rate, ask for the full-stay total.
 4. Ask once whether a lower direct rate is available. Never invent a competing quote or price. At most {{max_negotiation_rounds}} attempts, then accept their best answer.
 5. Ask if there is a reference or quote number. Do not insist if they have none.

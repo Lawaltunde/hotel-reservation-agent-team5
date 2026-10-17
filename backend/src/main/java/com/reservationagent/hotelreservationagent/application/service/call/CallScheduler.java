@@ -8,6 +8,7 @@ import com.reservationagent.hotelreservationagent.domain.call.CallStatus;
 import com.reservationagent.hotelreservationagent.domain.call.PhoneCall;
 import com.reservationagent.hotelreservationagent.domain.candidate.HotelCandidate;
 import com.reservationagent.hotelreservationagent.domain.hotel.Hotel;
+import com.reservationagent.hotelreservationagent.domain.geography.Municipality;
 import com.reservationagent.hotelreservationagent.domain.task.BookingTask;
 import com.reservationagent.hotelreservationagent.domain.task.TaskIntake;
 import com.reservationagent.hotelreservationagent.domain.task.TaskIntake.StatedField;
@@ -16,6 +17,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
+import java.util.Locale;
+import java.time.format.DateTimeFormatter;
+import java.time.LocalDate;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -34,6 +38,8 @@ public class CallScheduler {
     private static final Logger log = LoggerFactory.getLogger(CallScheduler.class);
     /** What the voice agent sees for a value the guest did not give; it must not invent one. */
     static final String NOT_SPECIFIED = "not specified";
+    /** The {@code party} variable when the guest gave no guest count. */
+    static final String NO_GUEST_COUNT = "no guest count given";
 
     private final VoiceCallProvider voice;
     private final PhoneCallRepository calls;
@@ -102,7 +108,8 @@ public class CallScheduler {
         vars.put("rooms", stated(intake, StatedField.ROOMS, task.stay().rooms()));
         vars.put("adults", stated(intake, StatedField.ADULTS, task.stay().adults()));
         vars.put("children", stated(intake, StatedField.CHILDREN, task.stay().children()));
-        vars.put("stay_request", stayRequest(task));
+        vars.put("stay_request", stayRequest(task, LocalDate.now(clock.withZone(Municipality.DEFAULT_TIME_ZONE))));
+        vars.put("party", party(task));
         vars.put("max_negotiation_rounds", String.valueOf(policy.maxNegotiationRounds()));
         vars.put("authorization_mode", task.authorizationMode().name());
         vars.put("required_amenities", String.join(", ", task.requiredAmenities()));
@@ -113,23 +120,36 @@ public class CallScheduler {
         return intake.isStated(field) ? String.valueOf(value) : NOT_SPECIFIED;
     }
 
+    private static final DateTimeFormatter SPOKEN_DATE = DateTimeFormatter.ofPattern("EEEE MMMM d", Locale.CANADA);
+
     /**
-     * One sentence the agent can say, using only what the guest stated. Unstated counts are left out
-     * so the hotel quotes its cheapest available room at standard occupancy.
+     * The stay as a spoken date phrase, e.g. "tonight, Saturday October 17, for one night, checking out
+     * Sunday October 18". The agent says "Do you have any rooms available for {stay_request}?".
      */
-    static String stayRequest(BookingTask task) {
-        TaskIntake in = task.intake();
-        StringBuilder s = new StringBuilder();
-        s.append(in.isStated(StatedField.ROOMS) && task.stay().rooms() > 1 ? task.stay().rooms() + " rooms" : "a room");
-        if (in.isStated(StatedField.ADULTS)) {
-            s.append(" for ").append(task.stay().adults()).append(task.stay().adults() == 1 ? " adult" : " adults");
-            if (in.isStated(StatedField.CHILDREN) && task.stay().children() > 0) {
-                s.append(" and ").append(task.stay().children()).append(task.stay().children() == 1 ? " child" : " children");
-            }
-        }
+    static String stayRequest(BookingTask task, LocalDate today) {
+        LocalDate in = task.stay().checkIn();
         long nights = task.stay().nights();
-        s.append(", checking in ").append(task.stay().checkIn()).append(" and checking out ")
-                .append(task.stay().checkOut()).append(" (").append(nights).append(nights == 1 ? " night)" : " nights)");
+        String when = in.equals(today) ? "tonight, " + SPOKEN_DATE.format(in)
+                : in.equals(today.plusDays(1)) ? "tomorrow night, " + SPOKEN_DATE.format(in)
+                : SPOKEN_DATE.format(in);
+        return when + ", for " + (nights == 1 ? "one night" : nights + " nights") + ", checking out "
+                + SPOKEN_DATE.format(task.stay().checkOut());
+    }
+
+    /** Who the room is for, only as the guest stated it; otherwise a marker the prompt never reads out. */
+    static String party(BookingTask task) {
+        TaskIntake in = task.intake();
+        if (!in.isStated(StatedField.ADULTS)) {
+            return NO_GUEST_COUNT;
+        }
+        StringBuilder s = new StringBuilder();
+        if (in.isStated(StatedField.ROOMS) && task.stay().rooms() > 1) {
+            s.append(task.stay().rooms()).append(" rooms, ");
+        }
+        s.append(task.stay().adults()).append(task.stay().adults() == 1 ? " adult" : " adults");
+        if (in.isStated(StatedField.CHILDREN) && task.stay().children() > 0) {
+            s.append(" and ").append(task.stay().children()).append(task.stay().children() == 1 ? " child" : " children");
+        }
         return s.toString();
     }
 
