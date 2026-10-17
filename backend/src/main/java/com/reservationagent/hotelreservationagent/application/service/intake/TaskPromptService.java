@@ -10,9 +10,13 @@ import com.reservationagent.hotelreservationagent.application.service.validation
 import com.reservationagent.hotelreservationagent.application.service.validation.RequestValidationException;
 import com.reservationagent.hotelreservationagent.application.service.validation.RequestValidationException.FieldError;
 import com.reservationagent.hotelreservationagent.domain.geography.Municipality;
+import com.reservationagent.hotelreservationagent.domain.shared.Money;
 import com.reservationagent.hotelreservationagent.domain.task.AuthorizationMode;
 import com.reservationagent.hotelreservationagent.domain.task.BookingTask;
 import com.reservationagent.hotelreservationagent.domain.task.DateExpression;
+import com.reservationagent.hotelreservationagent.domain.task.TaskIntake;
+import com.reservationagent.hotelreservationagent.domain.task.TaskIntake.EmailSource;
+import com.reservationagent.hotelreservationagent.domain.task.TaskIntake.StatedField;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -22,6 +26,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -35,12 +40,14 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * Turns one free-text request into a {@link Command} and submits it through the normal path, so a
- * prompt gets exactly the validation, Ontario check and defaults of a form submission.
+ * Turns one free-text request (possibly several chat messages joined by newlines, the latest
+ * winning) into a {@link Command} and submits it through the normal path, so a prompt gets the
+ * validation and Ontario check of a form submission.
  *
  * <p>Java owns everything that must be exact: the email address is found with a regular expression
  * and replaced with {@value #EMAIL_PLACEHOLDER} before the prompt reaches the AI model, dates are
- * resolved against today in Ontario, and the defaults come from {@link IntakeDefaults}.
+ * resolved against today in Ontario, and what the prompt left out is handled by {@link IntakeDefaults}
+ * and recorded as unstated rather than presented as the user's.
  */
 @Service
 public class TaskPromptService implements SubmitTaskPromptUseCase {
@@ -59,16 +66,20 @@ public class TaskPromptService implements SubmitTaskPromptUseCase {
     private final BookingTaskRepository tasks;
     private final Clock clock;
     private final Duration defaultDeadline;
+    private final String organizerEmail;
 
     public TaskPromptService(TaskPromptInterpreter interpreter, SubmitBookingTaskUseCase submitTask,
                              BookingRequestValidator validator, BookingTaskRepository tasks, Clock clock,
-                             @Value("${app.intake.default-deadline:PT30M}") Duration defaultDeadline) {
+                             @Value("${app.intake.default-deadline:PT30M}") Duration defaultDeadline,
+                             @Value("${app.report.recipient:}") String organizerEmail) {
         this.interpreter = interpreter;
         this.submitTask = submitTask;
         this.validator = validator;
         this.tasks = tasks;
         this.clock = clock;
         this.defaultDeadline = defaultDeadline;
+        this.organizerEmail = organizerEmail == null || organizerEmail.isBlank() ? null
+                : organizerEmail.strip().toLowerCase(Locale.ROOT);
     }
 
     @Override
@@ -86,36 +97,54 @@ public class TaskPromptService implements SubmitTaskPromptUseCase {
         }
 
         List<FieldError> errors = new ArrayList<>();
-        String email = singleEmail(prompt, errors);
+        Set<StatedField> stated = EnumSet.noneOf(StatedField.class);
+        List<String> assumptions = new ArrayList<>();
+
+        String email = latestEmail(prompt);
+        EmailSource emailSource = EmailSource.STATED;
+        if (email != null) {
+            stated.add(StatedField.EMAIL);
+        } else if (organizerEmail != null) {
+            email = organizerEmail;
+            emailSource = EmailSource.ORGANIZER_FALLBACK;
+            assumptions.add("No email address given: sending the report to the organizer inbox");
+        } else {
+            errors.add(new FieldError("email", "Include the email address the result should be sent to"));
+        }
+
         InterpretedPrompt p = interpreter.interpret(EMAIL.matcher(prompt).replaceAll(EMAIL_PLACEHOLDER));
 
         LocalDate today = LocalDate.now(clock.withZone(Municipality.DEFAULT_TIME_ZONE));
-        LocalDate checkIn = null;
-        LocalDate checkOut = null;
-        if (p.checkIn() == null) {
-            errors.add(new FieldError("checkIn", "Say which day you want to check in"));
-        } else {
-            checkIn = p.checkIn().resolve(today, today).orElse(null);
-            if (checkIn == null) errors.add(new FieldError("checkIn", "The check-in date could not be understood"));
-        }
-        if (checkIn != null) {
-            if (p.checkOut() != null) {
-                checkOut = p.checkOut().resolve(today, checkIn.plusDays(1)).orElse(null);
-                if (checkOut == null) errors.add(new FieldError("checkOut", "The check-out date could not be understood"));
-            } else if (p.nights() != null) {
-                if (p.nights() < 1) errors.add(new FieldError("checkOut", "The stay must be at least 1 night"));
-                else checkOut = checkIn.plusDays(p.nights());
-            } else {
-                checkOut = checkIn.plusDays(isWeekend(p.checkIn())
-                        ? IntakeDefaults.NIGHTS_FOR_WEEKEND : IntakeDefaults.NIGHTS_WHEN_NO_CHECK_OUT);
-            }
-        }
+        LocalDate checkIn = resolve(p.checkIn(), today, today, "check-in", assumptions);
+        LocalDate checkOut = checkIn == null ? null
+                : resolve(p.checkOut(), today, checkIn.plusDays(1), "check-out", assumptions);
+        Integer nights = p.nights() != null && p.nights() > 0 ? p.nights() : null;
+        if (checkIn != null) stated.add(StatedField.CHECK_IN);
+        if (checkOut != null || (checkIn != null && nights != null)) stated.add(StatedField.CHECK_OUT);
+        IntakeDefaults.Stay stay = IntakeDefaults.stay(today, checkIn, checkOut, nights,
+                p.checkIn() != null && isWeekend(p.checkIn()));
+        assumptions.addAll(stay.assumptions());
 
+        if (p.rooms() != null) stated.add(StatedField.ROOMS);
+        if (p.adults() != null) {
+            stated.add(StatedField.ADULTS);
+        } else {
+            assumptions.add("Number of guests not given: asking for the cheapest available room");
+        }
+        if (p.children() != null) stated.add(StatedField.CHILDREN);
+
+        long stayNights = ChronoUnit.DAYS.between(stay.checkIn(), stay.checkOut());
+        BigDecimal maxBudget = IntakeDefaults.stayTotal(p.budget(), stayNights);
+        BigDecimal perNight = IntakeDefaults.perNight(p.budget());
+        if (maxBudget != null) stated.add(StatedField.MAX_BUDGET);
+
+        TaskIntake intake = new TaskIntake(prompt, stated, emailSource, p.notes(),
+                perNight == null || perNight.signum() <= 0 ? null : Money.cad(perNight), assumptions);
         Command command = new Command(
                 requestId,
                 p.city(),
-                checkIn,
-                checkOut,
+                stay.checkIn(),
+                stay.checkOut(),
                 p.rooms() == null ? IntakeDefaults.ROOMS : p.rooms(),
                 p.adults() == null ? IntakeDefaults.ADULTS : p.adults(),
                 p.children() == null ? IntakeDefaults.CHILDREN : p.children(),
@@ -123,12 +152,12 @@ public class TaskPromptService implements SubmitTaskPromptUseCase {
                 clock.instant().plus(defaultDeadline),
                 amenities(p.amenities()),
                 AuthorizationMode.ENQUIRY_ONLY,
-                maxBudget(p, checkIn, checkOut),
+                maxBudget,
                 false,
-                prompt);
+                intake);
 
         if (!errors.isEmpty()) {
-            // Report every problem at once: the user gets one chance to fix the prompt.
+            // Report every problem at once.
             try {
                 validator.validate(command);
             } catch (RequestValidationException e) {
@@ -143,33 +172,34 @@ public class TaskPromptService implements SubmitTaskPromptUseCase {
         }
     }
 
+    /**
+     * A stated date, or {@code null} if none was stated. A date that cannot be resolved is treated as
+     * unstated (the prompt cannot be corrected on the day) and noted as an assumption.
+     */
+    private static LocalDate resolve(DateExpression date, LocalDate today, LocalDate reference, String label,
+                                     List<String> assumptions) {
+        if (date == null || date.kind() == null) {
+            return null;
+        }
+        Optional<LocalDate> resolved = date.resolve(today, reference);
+        if (resolved.isEmpty()) {
+            assumptions.add("The " + label + " date could not be understood and was ignored");
+        }
+        return resolved.orElse(null);
+    }
+
     private static boolean isWeekend(DateExpression date) {
         return date.kind() == DateExpression.Kind.THIS_WEEKEND || date.kind() == DateExpression.Kind.NEXT_WEEKEND;
     }
 
-    private static String singleEmail(String prompt, List<FieldError> errors) {
-        Set<String> found = new LinkedHashSet<>();
+    /** The last address in the prompt: in a chat transcript the latest message wins. Lower-cased. */
+    private static String latestEmail(String prompt) {
+        String last = null;
         Matcher m = EMAIL.matcher(prompt);
         while (m.find()) {
-            found.add(m.group().toLowerCase(Locale.ROOT));
+            last = m.group();
         }
-        if (found.isEmpty()) {
-            errors.add(new FieldError("email", "Include the email address the result should be sent to"));
-            return null;
-        }
-        if (found.size() > 1) {
-            errors.add(new FieldError("email", "Include only one email address (found " + found.size() + ")"));
-            return null;
-        }
-        return found.iterator().next();
-    }
-
-    /** A whole-stay budget wins; a nightly one is multiplied by the nights once the dates are known. */
-    private static BigDecimal maxBudget(InterpretedPrompt p, LocalDate checkIn, LocalDate checkOut) {
-        if (p.maxBudgetCad() != null || p.maxBudgetPerNightCad() == null || checkIn == null || checkOut == null) {
-            return p.maxBudgetCad();
-        }
-        return p.maxBudgetPerNightCad().multiply(BigDecimal.valueOf(ChronoUnit.DAYS.between(checkIn, checkOut)));
+        return last == null ? null : last.toLowerCase(Locale.ROOT);
     }
 
     private static Set<String> amenities(List<String> requested) {
@@ -184,9 +214,6 @@ public class TaskPromptService implements SubmitTaskPromptUseCase {
     private static RequestValidationException merged(List<FieldError> intake, List<FieldError> validation) {
         List<FieldError> all = new ArrayList<>(intake);
         Set<String> reported = intake.stream().map(FieldError::field).collect(Collectors.toCollection(HashSet::new));
-        if (reported.contains("checkIn")) {
-            reported.add("checkOut"); // without a check-in there is no check-out to complain about
-        }
         for (FieldError e : validation) {
             String field = e.field() == null ? null : FIELD_NAMES.getOrDefault(e.field(), e.field());
             if (field == null || !reported.contains(field)) {

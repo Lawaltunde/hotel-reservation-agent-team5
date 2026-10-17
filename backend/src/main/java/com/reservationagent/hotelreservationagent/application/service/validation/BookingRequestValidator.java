@@ -1,6 +1,7 @@
 package com.reservationagent.hotelreservationagent.application.service.validation;
 
 import com.reservationagent.hotelreservationagent.application.port.in.SubmitBookingTaskUseCase.Command;
+import com.reservationagent.hotelreservationagent.application.port.out.MunicipalityGeocoder;
 import com.reservationagent.hotelreservationagent.application.port.out.MunicipalityRepository;
 import com.reservationagent.hotelreservationagent.application.service.validation.RequestValidationException.FieldError;
 import com.reservationagent.hotelreservationagent.domain.geography.Municipality;
@@ -10,6 +11,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 /** Hard validation rules. Deterministic; no LLM involvement. "Today" is the date in Ontario, not UTC. */
@@ -19,10 +21,12 @@ public class BookingRequestValidator {
     private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
 
     private final MunicipalityRepository municipalities;
+    private final MunicipalityGeocoder geocoder;
     private final Clock clock;
 
-    public BookingRequestValidator(MunicipalityRepository municipalities, Clock clock) {
+    public BookingRequestValidator(MunicipalityRepository municipalities, MunicipalityGeocoder geocoder, Clock clock) {
         this.municipalities = municipalities;
+        this.geocoder = geocoder;
         this.clock = clock;
     }
 
@@ -62,8 +66,14 @@ public class BookingRequestValidator {
     private Municipality resolveOntarioMunicipality(String city) {
         List<Municipality> matches = municipalities.findByNameOrAlias(city.trim());
         if (matches.isEmpty()) {
-            throw new OutOfScopeLocationException(
-                    "'" + city + "' is not a supported Ontario municipality", List.of());
+            // Not in the table: a smaller town or a typo. Ask the geocoder before giving up.
+            Optional<MunicipalityGeocoder.Locality> locality = geocoder.findOntarioLocality(city.trim());
+            if (locality.isPresent()) {
+                return municipalities.addGeocoded(locality.get().name(), locality.get().centre());
+            }
+            String prefix = city.trim().length() >= 3 ? city.trim().substring(0, 3) : city.trim();
+            throw new OutOfScopeLocationException("'" + city + "' is not a supported Ontario municipality",
+                    municipalities.searchByPrefix(prefix, 5).stream().map(Municipality::name).toList());
         }
         if (matches.size() > 1) {
             throw new OutOfScopeLocationException(

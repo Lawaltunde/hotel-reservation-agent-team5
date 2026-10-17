@@ -85,7 +85,7 @@ public class BookingTaskService implements SubmitBookingTaskUseCase, GetBookingT
                 command.maximumTotalCad() == null ? null : Money.cad(command.maximumTotalCad()),
                 command.requiredAmenities(),
                 command.allowCompetingQuoteDisclosure(),
-                command.originalPrompt(),
+                command.intake(),
                 command.deadline(),
                 TaskStatus.RECEIVED,
                 null,
