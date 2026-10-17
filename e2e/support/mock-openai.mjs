@@ -4,7 +4,7 @@
 // app at it: SPRING_AI_OPENAI_BASE_URL=http://localhost:4010/v1 (see e2e/README.md).
 //
 //   "explode" in the request  -> HTTP 500 (the app answers 503: request reader unavailable)
-//   "vancouver"               -> city Vancouver (the app answers 422: outside Ontario)
+//   "seattle"                 -> city Seattle (the app answers 422: outside the supported area)
 //   "ottawa"                  -> Ottawa, tomorrow, 2 nights, 2 adults, up to $250 a night
 //   anything else             -> nothing understood (every field null)
 import { createServer } from "node:http";
@@ -19,7 +19,7 @@ function reading(text) {
     city: null, checkIn: null, checkOut: null, nights: null, rooms: null, adults: null, children: null,
     budget: null, amenities: [], notes: null,
   };
-  if (text.includes("vancouver")) return { ...base, city: "Vancouver", checkIn: date("TOMORROW"), nights: 2, adults: 2 };
+  if (text.includes("seattle")) return { ...base, city: "Seattle", checkIn: date("TOMORROW"), nights: 2, adults: 2 };
   if (text.includes("ottawa")) {
     return { ...base, city: "Ottawa", checkIn: date("TOMORROW"), nights: 2, adults: 2,
       budget: { amount: 250, unit: "PER_NIGHT" } };
