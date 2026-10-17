@@ -1,8 +1,8 @@
 # Hotel Deal Agent: frontend
 
-Next.js (App Router) + TypeScript + Tailwind CSS UI for the Hotel Deal Agent. Users pick an
-Ontario city, dates and guests; the backend phones hotels and negotiates; this app shows live
-progress and the final result. See the root `README.md` (§11) for the request contract.
+Next.js (App Router) + TypeScript + Tailwind CSS UI for the Hotel Deal Agent. Users chat with the
+agent in one message (an Ontario city, dates, guests and their email); the backend phones hotels and negotiates;
+this app shows live progress, the quotes and the email that was sent. See the root `README.md` (§11) for the request contract.
 
 ## How it ships
 
@@ -36,18 +36,30 @@ off (`compress: false`) because it would otherwise buffer the SSE progress strea
 
 | Route | What it shows |
 |---|---|
-| `/` | Search form: Ontario city autocomplete, dates, guests, email, deadline, budget, authorization mode |
-| `/task?id=<taskId>` | Live progress (SSE, falling back to polling every 3 s) and the result with every quote |
+| `/` | The chat with the agent. Each user message resends the whole conversation (all user messages joined by newlines; the latest email address wins) to `POST /api/tasks/prompt` with an `Idempotency-Key`. A 400 becomes a follow-up question for only what's missing; a 422 offers "Search <city>" chips for an ambiguous Ontario city. On 202 the URL becomes `/?task=<id>` |
+| `/?task=<id>` | The same chat, rebuilt from `GET /api/tasks/{id}` (so a refresh works): what was understood (`task.request`), live progress over SSE (polling every 3 s as a fallback), the result, the quotes, and the email that was sent (`task.report`) |
+| `/task?id=<id>` | Old link format; redirects to `/?task=<id>` |
 
 ## Code layout
 
 ```
 src/
-  app/          routes and layouts only
-  components/   UI (SearchForm, CityAutocomplete, ProgressTimeline, OfferCard, ResultSummary, TaskView)
-  models/       API types (task, municipality, problem-detail, health) and the zod form schema (search-form)
-  services/     API client: apiRequest/ApiError, createTask, getTask, subscribeToTask, searchMunicipalities
+  app/              routes and layouts only
+  components/chat/  the chat: ChatApp (layout), useAgentChat (state), intake (pure prompt and follow-up
+                    logic), ChatLog, Composer, Messages, TaskThread, UnderstoodCard, EmailPreview
+  components/       shared result UI (OfferCard, ResultSummary, BackendStatus, format)
+  models/           API types (task, problem-detail, health)
+  services/         API client: apiRequest/ApiError, createTaskFromPrompt, getTask, subscribeToTask
 ```
+
+**Email preview.** `report.bodyHtml` is rendered only in an `<iframe sandbox="">` via `srcdoc`, with a CSP
+that blocks all network requests (no remote images or tracking pixels). It is never injected into the
+page. Only `http(s)` recording URLs are linked.
+
+**Design.** Colours are CSS custom properties in `globals.css` (light values, then dark values under
+`prefers-color-scheme: dark`) exposed to Tailwind as `bg-paper`, `text-ink`, `text-pine` and so on;
+use those rather than Tailwind's palette so dark mode keeps working. Fonts (Young Serif, Atkinson
+Hyperlegible Next and Mono) are self-hosted at build time by `next/font`.
 
 **Honesty rule (root README §1).** The UI never presents a quote or enquiry as a booking. An
 enquiry ID is labelled "Hotel reference (not a booking)", unknown amounts read "Unknown" (never 0),
