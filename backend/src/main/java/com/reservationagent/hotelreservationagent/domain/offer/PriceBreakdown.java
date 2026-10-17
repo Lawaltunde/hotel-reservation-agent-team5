@@ -26,6 +26,9 @@ public record PriceBreakdown(
         TaxInclusion taxInclusion
 ) {
 
+    /** Ontario HST on accommodation: a fixed legal rate, so applying it is a computation, not a guess. */
+    public static final BigDecimal ONTARIO_HST_RATE = new BigDecimal("0.13");
+
     /** Stated and computed totals may differ by rounding; more than this is flagged. */
     public static final Money DISAGREEMENT_TOLERANCE = Money.cad(BigDecimal.ONE);
 
@@ -69,5 +72,30 @@ public record PriceBreakdown(
         return allInTotal != null && computedTotal()
                 .map(sum -> sum.minus(allInTotal).abs().compareTo(DISAGREEMENT_TOLERANCE) > 0)
                 .orElse(false);
+    }
+
+    /**
+     * The price to rank and report: tier A ({@link #comparableTotal()}) when known, else tier B, an
+     * estimate from a stated pre-tax charge (the room subtotal, or a total the hotel said excludes
+     * taxes) plus HST (stated, else 13%) plus stated mandatory fees. Empty when neither exists.
+     */
+    public Optional<OfferPrice> price() {
+        if (computedTotal().isPresent()) {
+            return Optional.of(new OfferPrice(computedTotal().get(), OfferPrice.PriceBasis.SUM_OF_STATED_PARTS));
+        }
+        Optional<Money> comparable = comparableTotal();
+        if (comparable.isPresent()) {
+            return Optional.of(new OfferPrice(comparable.get(), OfferPrice.PriceBasis.STATED_ALL_IN));
+        }
+        Money preTax = roomSubtotal != null ? roomSubtotal
+                : allInTotal != null && taxInclusion == TaxInclusion.EXCLUDED ? allInTotal : null;
+        if (preTax == null) {
+            return Optional.empty();
+        }
+        Money estimate = preTax.plus(hst != null ? hst : preTax.times(ONTARIO_HST_RATE));
+        if (roomSubtotal != null && mandatoryFees != null) {
+            estimate = estimate.plus(mandatoryFees);
+        }
+        return Optional.of(new OfferPrice(estimate, OfferPrice.PriceBasis.ESTIMATED_HST));
     }
 }
