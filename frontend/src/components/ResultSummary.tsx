@@ -1,4 +1,4 @@
-import { formatMoney, formatQuoteValidity, outcomeLabel, statusLabel } from "@/components/format";
+import { ESTIMATE_NOTE, formatMoney, formatQuoteValidity, outcomeLabel, rankingPrice, statusLabel } from "@/components/format";
 import type { Task } from "@/models/task";
 import { isTerminalStatus } from "@/models/task";
 
@@ -30,9 +30,10 @@ function bestQuotePhrase(task: Task): string | null {
   const best = task.bestOffer;
   if (!best) return null;
   const hotel = best.hotelName ?? "an unnamed hotel";
-  return best.negotiatedTotal === null
-    ? `from ${hotel}, all-in total unknown`
-    : `${formatMoney(best.negotiatedTotal, best.currency || "CAD")} all-in at ${hotel}`;
+  const { amount, estimated } = rankingPrice(best);
+  if (amount === null) return `from ${hotel}, all-in total unknown`;
+  const money = formatMoney(amount, best.currency || "CAD");
+  return estimated ? `≈ ${money} at ${hotel} (${ESTIMATE_NOTE})` : `${money} all-in at ${hotel}`;
 }
 
 /** Summary for a finished search that has no usable quote, keyed by outcome. */
