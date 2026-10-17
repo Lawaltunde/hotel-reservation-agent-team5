@@ -101,13 +101,17 @@ public class TaskOrchestrator {
         }
     }
 
-    /** After an unexpected failure, still get the report out with whatever was found. */
-    private void rescue(UUID taskId) {
+    /**
+     * After an unexpected failure, or for a task stranded by a restart, still get the report out with
+     * whatever was found: "no result" for a task that never reached the calls, the best confirmed
+     * result so far for one that did.
+     */
+    public void rescue(UUID taskId) {
         try {
             BookingTask task = tasks.findById(taskId).orElseThrow();
             switch (task.status()) {
                 case DISCOVERING, RANKING -> {
-                    state.transition(taskId, TaskStatus.NO_CANDIDATES, "Hotel search failed");
+                    state.transition(taskId, TaskStatus.NO_CANDIDATES, "Hotel search was interrupted");
                     finish(taskId, TaskOutcome.NO_ELIGIBLE_HOTELS);
                 }
                 case CALLING_FOR_QUOTES -> selectOffer(taskId);
