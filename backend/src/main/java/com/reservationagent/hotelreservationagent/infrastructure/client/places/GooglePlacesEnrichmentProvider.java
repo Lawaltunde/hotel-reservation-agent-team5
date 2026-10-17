@@ -18,6 +18,9 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Verifies a shortlisted hotel with Google Places API (New) Text Search, using a field mask so
  * only the fields we need are billed and returned. Google content is not merged into the open-data index.
+ * <p>
+ * TODO(enrichment cache): results are not cached in {@code hotel_enrichments} yet, so every
+ * shortlisted hotel costs one Text Search per task. Cache with {@code expires_at} per Google terms.
  */
 @Component
 @ConditionalOnProperty(name = "hotel-agent.google-places.enabled", havingValue = "true")

@@ -20,7 +20,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
-/** Spatial queries against the open-data hotel index. Typically answers in milliseconds. */
+/**
+ * Spatial queries against the open-data hotel index. Typically answers in milliseconds.
+ * <p>
+ * TODO(ingestion): the {@code hotels} table is empty until the open-data ingestion job
+ * (OSM / Overture / Foursquare, README section 4) exists, so every task currently ends in
+ * NO_CANDIDATES. Required amenities are not filtered yet either: there is no amenity data.
+ */
 @Repository
 class HotelIndexJdbcAdapter implements HotelIndex {
 
