@@ -1,5 +1,7 @@
 # Hotel Deal Agent
 
+[![CI](https://github.com/Lawaltunde/hotel-reservation-agent-team5/actions/workflows/ci.yml/badge.svg)](https://github.com/Lawaltunde/hotel-reservation-agent-team5/actions/workflows/ci.yml)
+
 An AI agent that finds the least expensive suitable hotel in any **Canadian** city,
 phones the most promising properties, negotiates the lowest permitted direct rate, and emails
 the result together with the call transcript.
